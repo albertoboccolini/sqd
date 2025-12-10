@@ -13,7 +13,6 @@ func ParseSQL(sql string) models.Command {
 
 	var cmd models.Command
 
-	// Detection action (già esistente)
 	if strings.HasPrefix(upper, "SELECT COUNT") {
 		cmd.Action = "COUNT"
 	}
@@ -41,6 +40,12 @@ func ParseSQL(sql string) models.Command {
 
 	cmd.File = strings.TrimSpace(cmd.File)
 
+	if cmd.Action == "UPDATE" && strings.Count(upper, "SET CONTENT=") > 1 {
+		cmd.IsBatch = true
+		cmd.Replacements = parseBatchReplacements(sql)
+		return cmd
+	}
+
 	if strings.Contains(upper, "WHERE CONTENT =") {
 		cmd.MatchExact = true
 		exactMatch := extractAfter(sql, "WHERE content =")
@@ -61,6 +66,45 @@ func ParseSQL(sql string) models.Command {
 	}
 
 	return cmd
+}
+
+func parseBatchReplacements(sql string) []models.Replacement {
+	var replacements []models.Replacement
+
+	parts := strings.SplitSeq(sql, ",")
+
+	for part := range parts {
+		part = strings.TrimSpace(part)
+		upperPart := strings.ToUpper(part)
+
+		if !strings.Contains(upperPart, "SET CONTENT=") {
+			continue
+		}
+
+		var repl models.Replacement
+
+		replaceValue := extractBetween(part, "SET content=", "WHERE")
+		replaceValue = strings.Trim(replaceValue, " '\"")
+		repl.Replace = replaceValue
+
+		if strings.Contains(upperPart, "WHERE CONTENT =") {
+			repl.MatchExact = true
+			exactMatch := extractAfter(part, "WHERE content =")
+			exactMatch = strings.Trim(exactMatch, " '\"")
+			repl.Pattern = regexp.MustCompile("^" + regexp.QuoteMeta(exactMatch) + "$")
+		}
+
+		if strings.Contains(upperPart, "WHERE CONTENT LIKE") {
+			repl.MatchExact = false
+			likePattern := extractAfter(part, "LIKE")
+			likePattern = strings.Trim(likePattern, " '\"")
+			repl.Pattern = likeToRegex(likePattern)
+		}
+
+		replacements = append(replacements, repl)
+	}
+
+	return replacements
 }
 
 func extractBetween(s, start, end string) string {

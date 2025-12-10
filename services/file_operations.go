@@ -28,9 +28,19 @@ func ExecuteCommand(cmd models.Command, files []string) {
 
 	if cmd.Action == "UPDATE" {
 		total := 0
-		for _, f := range files {
-			total += updateFile(f, cmd.Pattern, cmd.Replace)
+
+		if cmd.IsBatch {
+			for _, f := range files {
+				total += updateFileBatch(f, cmd.Replacements)
+			}
 		}
+
+		if !cmd.IsBatch {
+			for _, f := range files {
+				total += updateFile(f, cmd.Pattern, cmd.Replace)
+			}
+		}
+
 		fmt.Printf("Updated: %d occurrences\n", total)
 		return
 	}
@@ -78,7 +88,6 @@ func selectMatches(filename string, pattern *regexp.Regexp) {
 func updateFile(filename string, pattern *regexp.Regexp, replace string) int {
 	data, err := os.ReadFile(filename)
 	if err != nil {
-		fmt.Printf("Error reading %s: %v\n", filename, err)
 		return 0
 	}
 
@@ -88,6 +97,32 @@ func updateFile(filename string, pattern *regexp.Regexp, replace string) int {
 		if pattern.MatchString(line) {
 			lines[i] = pattern.ReplaceAllLiteralString(line, replace)
 			count++
+		}
+	}
+
+	if count > 0 {
+		os.WriteFile(filename, []byte(strings.Join(lines, "\n")), 0644)
+	}
+
+	return count
+}
+
+func updateFileBatch(filename string, replacements []models.Replacement) int {
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return 0
+	}
+
+	lines := strings.Split(string(data), "\n")
+	count := 0
+
+	for i, line := range lines {
+		for _, repl := range replacements {
+			if repl.Pattern.MatchString(line) {
+				lines[i] = repl.Pattern.ReplaceAllLiteralString(line, repl.Replace)
+				count++
+				break
+			}
 		}
 	}
 
