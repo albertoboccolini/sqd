@@ -85,9 +85,7 @@ func updateFile(filename string, pattern *regexp.Regexp, replace string) int {
 	lines := strings.Split(string(data), "\n")
 	count := 0
 	for i, line := range lines {
-		fmt.Printf("Testing line %d: %q against pattern %s\n", i, line, pattern.String())
 		if pattern.MatchString(line) {
-			fmt.Printf("MATCHED! Replacing with: %q\n", replace)
 			lines[i] = pattern.ReplaceAllLiteralString(line, replace)
 			count++
 		}

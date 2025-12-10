@@ -13,6 +13,7 @@ func ParseSQL(sql string) models.Command {
 
 	var cmd models.Command
 
+	// Detection action (già esistente)
 	if strings.HasPrefix(upper, "SELECT COUNT") {
 		cmd.Action = "COUNT"
 	}
@@ -40,9 +41,19 @@ func ParseSQL(sql string) models.Command {
 
 	cmd.File = strings.TrimSpace(cmd.File)
 
-	likePattern := extractAfter(sql, "LIKE")
-	likePattern = strings.Trim(likePattern, " '\"")
-	cmd.Pattern = likeToRegex(likePattern)
+	if strings.Contains(upper, "WHERE CONTENT =") {
+		cmd.MatchExact = true
+		exactMatch := extractAfter(sql, "WHERE content =")
+		exactMatch = strings.Trim(exactMatch, " '\"")
+		cmd.Pattern = regexp.MustCompile("^" + regexp.QuoteMeta(exactMatch) + "$")
+	}
+
+	if strings.Contains(upper, "WHERE CONTENT LIKE") {
+		cmd.MatchExact = false
+		likePattern := extractAfter(sql, "LIKE")
+		likePattern = strings.Trim(likePattern, " '\"")
+		cmd.Pattern = likeToRegex(likePattern)
+	}
 
 	if cmd.Action == "UPDATE" {
 		cmd.Replace = extractBetween(sql, "SET content=", "WHERE")
