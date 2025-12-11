@@ -7,15 +7,17 @@ import (
 	"strings"
 )
 
+// IsTextFile checks if a file is a text file by reading its content and looking for non-text bytes.
+// This is necessary because some files may have text-like extensions but contain binary data.
 func IsTextFile(path string) bool {
-	f, err := os.Open(path)
+	file, err := os.Open(path)
 	if err != nil {
 		return false
 	}
-	defer f.Close()
 
+	defer file.Close()
 	buf := make([]byte, 8000)
-	n, _ := f.Read(buf)
+	n, _ := file.Read(buf)
 
 	for _, b := range buf[:n] {
 		if b == 0 {
@@ -37,11 +39,12 @@ func FindFiles(pattern string) []string {
 
 	var files []string
 
-	filepath.WalkDir(".", func(path string, d fs.DirEntry, err error) error {
+	filepath.WalkDir(".", func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
-		if d.IsDir() {
+
+		if entry.IsDir() {
 			return nil
 		}
 

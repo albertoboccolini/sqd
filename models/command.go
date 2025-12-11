@@ -1,9 +1,11 @@
 package models
 
-import "regexp"
+import (
+	"regexp"
+)
 
 type Command struct {
-	Action       string
+	Action       Action
 	File         string
 	Pattern      *regexp.Regexp
 	Replace      string

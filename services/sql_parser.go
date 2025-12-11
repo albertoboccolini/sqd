@@ -9,63 +9,58 @@ import (
 
 func ParseSQL(sql string) models.Command {
 	sql = strings.TrimSpace(sql)
-	upper := strings.ToUpper(sql)
+	upperSql := strings.ToUpper(sql)
 
-	var cmd models.Command
+	var command models.Command
 
-	if strings.HasPrefix(upper, "SELECT COUNT") {
-		cmd.Action = "COUNT"
-	}
-	if strings.HasPrefix(upper, "SELECT") && !strings.HasPrefix(upper, "SELECT COUNT") {
-		cmd.Action = "SELECT"
-	}
-	if strings.HasPrefix(upper, "UPDATE") {
-		cmd.Action = "UPDATE"
-	}
-	if strings.HasPrefix(upper, "DELETE") {
-		cmd.Action = "DELETE"
+	if strings.HasPrefix(upperSql, "SELECT COUNT") {
+		command.Action = models.COUNT
+		command.File = extractBetween(sql, "FROM", "WHERE")
 	}
 
-	if cmd.Action == "UPDATE" {
-		cmd.File = extractBetween(sql, "UPDATE", "SET")
+	if strings.HasPrefix(upperSql, "SELECT") && !strings.HasPrefix(upperSql, "SELECT COUNT") {
+		command.Action = models.SELECT
+		command.File = extractBetween(sql, "FROM", "WHERE")
 	}
 
-	if cmd.Action == "DELETE" {
-		cmd.File = extractBetween(sql, "DELETE FROM", "WHERE")
+	if strings.HasPrefix(upperSql, "UPDATE") {
+		command.Action = models.UPDATE
+		command.File = extractBetween(sql, "UPDATE", "SET")
 	}
 
-	if cmd.Action == "SELECT" || cmd.Action == "COUNT" {
-		cmd.File = extractBetween(sql, "FROM", "WHERE")
+	if strings.HasPrefix(upperSql, "DELETE") {
+		command.Action = models.DELETE
+		command.File = extractBetween(sql, "DELETE FROM", "WHERE")
 	}
 
-	cmd.File = strings.TrimSpace(cmd.File)
+	command.File = strings.TrimSpace(command.File)
 
-	if cmd.Action == "UPDATE" && strings.Count(upper, "SET CONTENT=") > 1 {
-		cmd.IsBatch = true
-		cmd.Replacements = parseBatchReplacements(sql)
-		return cmd
+	if command.Action == models.UPDATE && strings.Count(upperSql, "SET CONTENT=") > 1 {
+		command.IsBatch = true
+		command.Replacements = parseBatchReplacements(sql)
+		return command
 	}
 
-	if strings.Contains(upper, "WHERE CONTENT =") {
-		cmd.MatchExact = true
+	if strings.Contains(upperSql, "WHERE CONTENT =") {
+		command.MatchExact = true
 		exactMatch := extractAfter(sql, "WHERE content =")
 		exactMatch = strings.Trim(exactMatch, " '\"")
-		cmd.Pattern = regexp.MustCompile("^" + regexp.QuoteMeta(exactMatch) + "$")
+		command.Pattern = regexp.MustCompile("^" + regexp.QuoteMeta(exactMatch) + "$")
 	}
 
-	if strings.Contains(upper, "WHERE CONTENT LIKE") {
-		cmd.MatchExact = false
+	if strings.Contains(upperSql, "WHERE CONTENT LIKE") {
+		command.MatchExact = false
 		likePattern := extractAfter(sql, "LIKE")
 		likePattern = strings.Trim(likePattern, " '\"")
-		cmd.Pattern = likeToRegex(likePattern)
+		command.Pattern = likeToRegex(likePattern)
 	}
 
-	if cmd.Action == "UPDATE" {
-		cmd.Replace = extractBetween(sql, "SET content=", "WHERE")
-		cmd.Replace = strings.Trim(cmd.Replace, "'\"")
+	if command.Action == models.UPDATE {
+		command.Replace = extractBetween(sql, "SET content=", "WHERE")
+		command.Replace = strings.Trim(command.Replace, "'\"")
 	}
 
-	return cmd
+	return command
 }
 
 func parseBatchReplacements(sql string) []models.Replacement {
@@ -107,35 +102,36 @@ func parseBatchReplacements(sql string) []models.Replacement {
 	return replacements
 }
 
-func extractBetween(s, start, end string) string {
-	startUpper := strings.ToUpper(start)
-	endUpper := strings.ToUpper(end)
-	sUpper := strings.ToUpper(s)
+func extractBetween(query, start, end string) string {
+	upperStart := strings.ToUpper(start)
+	upperEnd := strings.ToUpper(end)
+	upperQuery := strings.ToUpper(query)
 
-	startIdx := strings.Index(sUpper, startUpper)
-	if startIdx == -1 {
+	startIndex := strings.Index(upperQuery, upperStart)
+	if startIndex == -1 {
 		return ""
 	}
-	startIdx += len(startUpper)
 
-	endIdx := strings.Index(sUpper[startIdx:], endUpper)
-	if endIdx == -1 {
-		return strings.TrimSpace(s[startIdx:])
+	startIndex += len(upperStart)
+	endIndex := strings.Index(upperQuery[startIndex:], upperEnd)
+
+	if endIndex == -1 {
+		return strings.TrimSpace(query[startIndex:])
 	}
 
-	return strings.TrimSpace(s[startIdx : startIdx+endIdx])
+	return strings.TrimSpace(query[startIndex : startIndex+endIndex])
 }
 
-func extractAfter(s, marker string) string {
+func extractAfter(query, marker string) string {
 	markerUpper := strings.ToUpper(marker)
-	sUpper := strings.ToUpper(s)
+	upperQuery := strings.ToUpper(query)
 
-	idx := strings.Index(sUpper, markerUpper)
-	if idx == -1 {
+	index := strings.Index(upperQuery, markerUpper)
+	if index == -1 {
 		return ""
 	}
 
-	return strings.TrimSpace(s[idx+len(markerUpper):])
+	return strings.TrimSpace(query[index+len(markerUpper):])
 }
 
 func likeToRegex(pattern string) *regexp.Regexp {
@@ -148,6 +144,7 @@ func likeToRegex(pattern string) *regexp.Regexp {
 	if !hasStart && hasEnd {
 		pattern = "^" + pattern
 	}
+
 	if hasStart && !hasEnd {
 		pattern = pattern + "$"
 	}

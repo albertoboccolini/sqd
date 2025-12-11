@@ -4,54 +4,55 @@ import (
 	"fmt"
 	"os"
 	"regexp"
-	"strings"
-
 	"sqd/models"
+	"strings"
 )
 
-func ExecuteCommand(cmd models.Command, files []string) {
-	if cmd.Action == "COUNT" {
+func ExecuteCommand(command models.Command, files []string) {
+	if command.Action == models.COUNT {
 		total := 0
-		for _, f := range files {
-			total += countMatches(f, cmd.Pattern)
+		for _, file := range files {
+			total += countMatches(file, command.Pattern)
 		}
+
 		fmt.Printf("%d lines matched\n", total)
 		return
 	}
 
-	if cmd.Action == "SELECT" {
-		for _, f := range files {
-			selectMatches(f, cmd.Pattern)
+	if command.Action == models.SELECT {
+		for _, file := range files {
+			selectMatches(file, command.Pattern)
 		}
+
 		return
 	}
 
-	if cmd.Action == "UPDATE" {
+	if command.Action == models.UPDATE {
 		total := 0
-
-		if cmd.IsBatch {
-			for _, f := range files {
-				total += updateFileBatch(f, cmd.Replacements)
+		if command.IsBatch {
+			for _, file := range files {
+				total += updateFileInBatch(file, command.Replacements)
 			}
+
+			PrintUpdateMessage(total)
+			return
 		}
 
-		if !cmd.IsBatch {
-			for _, f := range files {
-				total += updateFile(f, cmd.Pattern, cmd.Replace)
-			}
+		for _, file := range files {
+			total += updateFile(file, command.Pattern, command.Replace)
 		}
 
-		fmt.Printf("Updated: %d occurrences\n", total)
+		PrintUpdateMessage(total)
 		return
 	}
 
-	if cmd.Action == "DELETE" {
+	if command.Action == models.DELETE {
 		total := 0
-		for _, f := range files {
-			total += deleteMatches(f, cmd.Pattern)
+		for _, file := range files {
+			total += deleteMatches(file, command.Pattern)
 		}
+
 		fmt.Printf("Deleted: %d lines\n", total)
-		return
 	}
 }
 
@@ -63,11 +64,13 @@ func countMatches(filename string, pattern *regexp.Regexp) int {
 
 	lines := strings.Split(string(data), "\n")
 	count := 0
+
 	for _, line := range lines {
 		if pattern.MatchString(line) {
 			count++
 		}
 	}
+
 	return count
 }
 
@@ -93,6 +96,7 @@ func updateFile(filename string, pattern *regexp.Regexp, replace string) int {
 
 	lines := strings.Split(string(data), "\n")
 	count := 0
+
 	for i, line := range lines {
 		if pattern.MatchString(line) {
 			lines[i] = pattern.ReplaceAllLiteralString(line, replace)
@@ -107,7 +111,9 @@ func updateFile(filename string, pattern *regexp.Regexp, replace string) int {
 	return count
 }
 
-func updateFileBatch(filename string, replacements []models.Replacement) int {
+// updateFileInBatch applies multiple replacements to the file in a single pass.
+// This is more efficient than applying each replacement separately.
+func updateFileInBatch(filename string, replacements []models.Replacement) int {
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return 0
@@ -117,9 +123,9 @@ func updateFileBatch(filename string, replacements []models.Replacement) int {
 	count := 0
 
 	for i, line := range lines {
-		for _, repl := range replacements {
-			if repl.Pattern.MatchString(line) {
-				lines[i] = repl.Pattern.ReplaceAllLiteralString(line, repl.Replace)
+		for _, replacement := range replacements {
+			if replacement.Pattern.MatchString(line) {
+				lines[i] = replacement.Pattern.ReplaceAllLiteralString(line, replacement.Replace)
 				count++
 				break
 			}
