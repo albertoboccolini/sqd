@@ -41,6 +41,12 @@ func ParseSQL(sql string) models.Command {
 		return command
 	}
 
+	if command.Action == models.DELETE && strings.Count(upperSql, "WHERE CONTENT =") > 1 {
+		command.IsBatch = true
+		command.Deletions = parseBatchDeletions(sql)
+		return command
+	}
+
 	if strings.Contains(upperSql, "WHERE CONTENT =") {
 		command.MatchExact = true
 		exactMatch := extractAfter(sql, "WHERE content =")
@@ -61,6 +67,32 @@ func ParseSQL(sql string) models.Command {
 	}
 
 	return command
+}
+
+func parseBatchDeletions(sql string) []models.Deletion {
+	var deletions []models.Deletion
+
+	parts := strings.SplitSeq(sql, ",")
+
+	for part := range parts {
+		part = strings.TrimSpace(part)
+		upper := strings.ToUpper(part)
+
+		if !strings.Contains(upper, "WHERE CONTENT =") {
+			continue
+		}
+
+		var del models.Deletion
+		del.MatchExact = true
+
+		exactMatch := extractAfter(part, "WHERE content =")
+		exactMatch = strings.Trim(exactMatch, " '\"")
+		del.Pattern = regexp.MustCompile("^" + regexp.QuoteMeta(exactMatch) + "$")
+
+		deletions = append(deletions, del)
+	}
+
+	return deletions
 }
 
 func parseBatchReplacements(sql string) []models.Replacement {

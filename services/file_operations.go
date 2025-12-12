@@ -48,6 +48,16 @@ func ExecuteCommand(command models.Command, files []string) {
 
 	if command.Action == models.DELETE {
 		total := 0
+
+		if command.IsBatch {
+			for _, file := range files {
+				total += deleteMatchesInBatch(file, command.Deletions)
+			}
+
+			fmt.Printf("Deleted: %d lines\n", total)
+			return
+		}
+
 		for _, file := range files {
 			total += deleteMatches(file, command.Pattern)
 		}
@@ -155,6 +165,41 @@ func deleteMatches(filename string, pattern *regexp.Regexp) int {
 			continue
 		}
 		count++
+	}
+
+	if count > 0 {
+		os.WriteFile(filename, []byte(strings.Join(filtered, "\n")), 0644)
+	}
+
+	return count
+}
+
+// deleteMatchesInBatch applies multiple deletions to the file in a single pass.
+// This is more efficient than applying each deletion separately.
+func deleteMatchesInBatch(filename string, deletions []models.Deletion) int {
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return 0
+	}
+
+	lines := strings.Split(string(data), "\n")
+	filtered := []string{}
+	count := 0
+
+	for _, line := range lines {
+		shouldDelete := false
+
+		for _, deletion := range deletions {
+			if deletion.Pattern.MatchString(line) {
+				shouldDelete = true
+				count++
+				break
+			}
+		}
+
+		if !shouldDelete {
+			filtered = append(filtered, line)
+		}
 	}
 
 	if count > 0 {
