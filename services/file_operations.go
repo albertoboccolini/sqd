@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"os"
 	"regexp"
-	"sqd/models"
 	"strings"
+
+	"github.com/albertoboccolini/sqd/models"
 )
 
 func ExecuteCommand(command models.Command, files []string) {

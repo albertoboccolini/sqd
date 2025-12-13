@@ -1,0 +1,34 @@
+name: CI Pipeline
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  CI:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.25'
+
+      - name: Verify formatting
+        run: |
+          echo "Checking formatting with gofmt..."
+          gofmt_output=$(gofmt -l .)
+          if [ -n "$gofmt_output" ]; then
+            echo "Files not properly formatted:"
+            echo "$gofmt_output"
+            exit 1
+          fi
+
+      - name: Build binary
+        run: |
+          echo "Building application..."
+          go build -o build/app .

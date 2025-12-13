@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"strings"
 
-	"sqd/models"
+	"github.com/albertoboccolini/sqd/models"
 )
 
 func ParseSQL(sql string) models.Command {

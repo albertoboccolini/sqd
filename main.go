@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"sqd/services"
+	"github.com/albertoboccolini/sqd/services"
 )
 
 func main() {
