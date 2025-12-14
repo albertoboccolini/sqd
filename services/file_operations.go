@@ -9,6 +9,25 @@ import (
 	"github.com/albertoboccolini/sqd/models"
 )
 
+const ownerWritePerm = 0200
+
+func isFileBlocked(filename string) bool {
+	if !isPathInsideCwd(filename) {
+		return true
+	}
+
+	info, err := os.Stat(filename)
+	if err != nil {
+		return true
+	}
+
+	if info.Mode().Perm()&ownerWritePerm == 0 {
+		return true
+	}
+
+	return false
+}
+
 func ExecuteCommand(command models.Command, files []string) {
 	if command.Action == models.COUNT {
 		total := 0
@@ -100,6 +119,10 @@ func selectMatches(filename string, pattern *regexp.Regexp) {
 }
 
 func updateFile(filename string, pattern *regexp.Regexp, replace string) int {
+	if isFileBlocked(filename) {
+		return 0
+	}
+
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return 0
@@ -125,6 +148,10 @@ func updateFile(filename string, pattern *regexp.Regexp, replace string) int {
 // updateFileInBatch applies multiple replacements to the file in a single pass.
 // This is more efficient than applying each replacement separately.
 func updateFileInBatch(filename string, replacements []models.Replacement) int {
+	if isFileBlocked(filename) {
+		return 0
+	}
+
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return 0
@@ -151,6 +178,10 @@ func updateFileInBatch(filename string, replacements []models.Replacement) int {
 }
 
 func deleteMatches(filename string, pattern *regexp.Regexp) int {
+	if isFileBlocked(filename) {
+		return 0
+	}
+
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return 0
@@ -178,6 +209,10 @@ func deleteMatches(filename string, pattern *regexp.Regexp) int {
 // deleteMatchesInBatch applies multiple deletions to the file in a single pass.
 // This is more efficient than applying each deletion separately.
 func deleteMatchesInBatch(filename string, deletions []models.Deletion) int {
+	if isFileBlocked(filename) {
+		return 0
+	}
+
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return 0
