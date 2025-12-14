@@ -167,10 +167,6 @@ func extractAfter(query, marker string) string {
 }
 
 func likeToRegex(pattern string) *regexp.Regexp {
-	if len(pattern) > 1000 {
-		pattern = pattern[:1000]
-	}
-
 	hasStart := strings.HasPrefix(pattern, "%")
 	hasEnd := strings.HasSuffix(pattern, "%")
 

@@ -3,27 +3,16 @@ package services
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 
 	"github.com/albertoboccolini/sqd/models"
 )
 
-func isProtectedFile(filename string) bool {
-	cwd, _ := os.Getwd()
+const ownerWritePerm = 0200
 
-	abs, err := filepath.Abs(filepath.Clean(filename))
-	if err != nil {
-		return true
-	}
-
-	eval, _ := filepath.EvalSymlinks(abs)
-	if eval == "" {
-		eval = abs
-	}
-
-	if !strings.HasPrefix(eval, cwd+string(filepath.Separator)) {
+func isFileBlocked(filename string) bool {
+	if !isPathInsideCwd(filename) {
 		return true
 	}
 
@@ -32,7 +21,7 @@ func isProtectedFile(filename string) bool {
 		return true
 	}
 
-	if info.Mode().Perm()&0200 == 0 {
+	if info.Mode().Perm()&ownerWritePerm == 0 {
 		return true
 	}
 
@@ -130,7 +119,7 @@ func selectMatches(filename string, pattern *regexp.Regexp) {
 }
 
 func updateFile(filename string, pattern *regexp.Regexp, replace string) int {
-	if isProtectedFile(filename) {
+	if isFileBlocked(filename) {
 		return 0
 	}
 
@@ -159,7 +148,7 @@ func updateFile(filename string, pattern *regexp.Regexp, replace string) int {
 // updateFileInBatch applies multiple replacements to the file in a single pass.
 // This is more efficient than applying each replacement separately.
 func updateFileInBatch(filename string, replacements []models.Replacement) int {
-	if isProtectedFile(filename) {
+	if isFileBlocked(filename) {
 		return 0
 	}
 
@@ -189,7 +178,7 @@ func updateFileInBatch(filename string, replacements []models.Replacement) int {
 }
 
 func deleteMatches(filename string, pattern *regexp.Regexp) int {
-	if isProtectedFile(filename) {
+	if isFileBlocked(filename) {
 		return 0
 	}
 
@@ -220,7 +209,7 @@ func deleteMatches(filename string, pattern *regexp.Regexp) int {
 // deleteMatchesInBatch applies multiple deletions to the file in a single pass.
 // This is more efficient than applying each deletion separately.
 func deleteMatchesInBatch(filename string, deletions []models.Deletion) int {
-	if isProtectedFile(filename) {
+	if isFileBlocked(filename) {
 		return 0
 	}
 

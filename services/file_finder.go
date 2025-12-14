@@ -7,6 +7,8 @@ import (
 	"strings"
 )
 
+const maxTextFileSize = 100 * 1024 * 1024
+
 // IsTextFile checks if a file is a text file by reading its content and looking for non-text bytes.
 // This is necessary because some files may have text-like extensions but contain binary data.
 func IsTextFile(path string) bool {
@@ -15,7 +17,7 @@ func IsTextFile(path string) bool {
 		return false
 	}
 
-	if info.Size() > 100*1024*1024 {
+	if info.Size() > maxTextFileSize {
 		return false
 	}
 
@@ -41,25 +43,9 @@ func IsTextFile(path string) bool {
 	return true
 }
 
-func isValidPath(pattern string) bool {
-	cwd, _ := os.Getwd()
-
-	abs, err := filepath.Abs(filepath.Clean(pattern))
-	if err != nil {
-		return false
-	}
-
-	eval, _ := filepath.EvalSymlinks(abs)
-	if eval == "" {
-		eval = abs
-	}
-
-	return strings.HasPrefix(eval, cwd+string(filepath.Separator))
-}
-
 func FindFiles(pattern string) []string {
 	if !strings.Contains(pattern, "*") {
-		if !isValidPath(pattern) {
+		if !isPathInsideCwd(pattern) {
 			return []string{}
 		}
 		return []string{pattern}
@@ -77,7 +63,7 @@ func FindFiles(pattern string) []string {
 		}
 
 		matched, _ := filepath.Match(pattern, filepath.Base(path))
-		if matched && isValidPath(path) && IsTextFile(path) {
+		if matched && IsTextFile(path) {
 			files = append(files, path)
 		}
 
