@@ -14,10 +14,6 @@ func isFileBlocked(filename string) bool {
 		return true
 	}
 
-	if _, err := os.Stat(filename); err != nil {
-		return true
-	}
-
 	if !canWriteFile(filename) {
 		return true
 	}
