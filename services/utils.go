@@ -8,6 +8,8 @@ import (
 	"syscall"
 )
 
+const SQD_VERSION = "0.0.2"
+
 func PrintUpdateMessage(total int) {
 	fmt.Printf("Updated: %d occurrences\n", total)
 }

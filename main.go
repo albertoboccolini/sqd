@@ -10,10 +10,27 @@ import (
 )
 
 func main() {
+	versionFlag := flag.Bool("version", false, "Print version information")
+	flag.BoolVar(versionFlag, "v", false, "Print version information")
 	flag.Parse()
 
+	if *versionFlag {
+		fmt.Printf("v%s\n", services.SQD_VERSION)
+		os.Exit(0)
+	}
+
 	if len(flag.Args()) == 0 {
-		fmt.Println("Usage: sqd 'SELECT * FROM file.txt WHERE content LIKE pattern'")
+		fmt.Println("Usage: sqd 'query'")
+		fmt.Println("\nCommands:")
+		fmt.Println("  SELECT - Display matching lines")
+		fmt.Println("  UPDATE - Replace content in matching lines")
+		fmt.Println("  DELETE - Remove matching lines")
+		fmt.Println("\nExamples:")
+		fmt.Println("  sqd 'SELECT * FROM file.txt WHERE content LIKE pattern'")
+		fmt.Println("  sqd 'UPDATE file.txt SET old TO new WHERE content = match, SET foo TO bar WHERE content = other'")
+		fmt.Println("  sqd 'DELETE FROM file.txt WHERE content = exact_match'")
+		fmt.Println("\nFlags:")
+		fmt.Println("  -v, --version    Show the version information")
 		os.Exit(1)
 	}
 
