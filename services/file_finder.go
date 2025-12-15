@@ -62,6 +62,10 @@ func FindFiles(pattern string) []string {
 			return nil
 		}
 
+		if !isPathInsideCwd(path) {
+			return nil
+		}
+
 		matched, _ := filepath.Match(pattern, filepath.Base(path))
 		if matched && IsTextFile(path) {
 			files = append(files, path)
