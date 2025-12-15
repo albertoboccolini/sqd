@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 )
 
 func PrintUpdateMessage(total int) {
@@ -12,25 +13,52 @@ func PrintUpdateMessage(total int) {
 }
 
 func isPathInsideCwd(path string) bool {
-	cwd, err := os.Getwd()
+	currentWorkingDir, err := os.Getwd()
 	if err != nil {
 		return false
 	}
 
-	abs, err := filepath.Abs(filepath.Clean(path))
+	absolutePath, err := filepath.Abs(filepath.Clean(path))
 	if err != nil {
 		return false
 	}
 
-	eval, _ := filepath.EvalSymlinks(abs)
-	if eval == "" {
-		eval = abs
+	resolvedPath, _ := filepath.EvalSymlinks(absolutePath)
+	if resolvedPath == "" {
+		resolvedPath = absolutePath
 	}
 
-	rel, err := filepath.Rel(cwd, eval)
+	relativePath, err := filepath.Rel(currentWorkingDir, resolvedPath)
 	if err != nil {
 		return false
 	}
 
-	return !strings.HasPrefix(rel, "..") && !filepath.IsAbs(rel)
+	if strings.HasPrefix(relativePath, "..") || filepath.IsAbs(relativePath) {
+		return false
+	}
+
+	workingDirInfo, err := os.Stat(currentWorkingDir)
+	if err != nil {
+		return false
+	}
+
+	fileInfo, err := os.Stat(resolvedPath)
+	if err != nil {
+		return false
+	}
+
+	workingDirDevice := workingDirInfo.Sys().(*syscall.Stat_t).Dev
+	fileDevice := fileInfo.Sys().(*syscall.Stat_t).Dev
+
+	return workingDirDevice == fileDevice
+}
+
+func canWriteFile(path string) bool {
+	file, err := os.OpenFile(path, os.O_WRONLY, 0)
+	if err != nil {
+		return false
+	}
+
+	file.Close()
+	return true
 }

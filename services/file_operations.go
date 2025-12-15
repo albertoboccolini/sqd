@@ -9,19 +9,12 @@ import (
 	"github.com/albertoboccolini/sqd/models"
 )
 
-const ownerWritePerm = 0200
-
 func isFileBlocked(filename string) bool {
 	if !isPathInsideCwd(filename) {
 		return true
 	}
 
-	info, err := os.Stat(filename)
-	if err != nil {
-		return true
-	}
-
-	if info.Mode().Perm()&ownerWritePerm == 0 {
+	if !canWriteFile(filename) {
 		return true
 	}
 
