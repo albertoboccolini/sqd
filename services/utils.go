@@ -5,10 +5,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 )
 
-const SQD_VERSION = "0.0.2"
+const SQD_VERSION = "0.0.3"
 
 func PrintUpdateMessage(total int) {
 	fmt.Printf("Updated: %d occurrences\n", total)
@@ -39,20 +38,7 @@ func isPathInsideCwd(path string) bool {
 		return false
 	}
 
-	workingDirInfo, err := os.Stat(currentWorkingDir)
-	if err != nil {
-		return false
-	}
-
-	fileInfo, err := os.Stat(resolvedPath)
-	if err != nil {
-		return false
-	}
-
-	workingDirDevice := workingDirInfo.Sys().(*syscall.Stat_t).Dev
-	fileDevice := fileInfo.Sys().(*syscall.Stat_t).Dev
-
-	return workingDirDevice == fileDevice
+	return true
 }
 
 func canWriteFile(path string) bool {
