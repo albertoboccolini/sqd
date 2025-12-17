@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -34,13 +35,34 @@ func ExecuteCommand(command models.Command, files []string) {
 
 	if command.Action == models.SELECT {
 		for _, file := range files {
-			selectMatches(file, command.Pattern)
+			if command.FilterOnName {
+				basename := filepath.Base(file)
+				if !command.Pattern.MatchString(basename) {
+					continue
+				}
+			}
+			selectMatches(file, command.Pattern, command.Columns, command.FilterOnName)
 		}
 
 		return
 	}
 
 	if command.Action == models.UPDATE {
+		if command.OperateOnName {
+			total := 0
+			for _, file := range files {
+				basename := filepath.Base(file)
+				if command.FilterOnName && !command.Pattern.MatchString(basename) {
+					continue
+				}
+				if renameFile(file, command.Replace) {
+					total++
+				}
+			}
+			fmt.Printf("Renamed: %d files\n", total)
+			return
+		}
+
 		total := 0
 		if command.IsBatch {
 			for _, file := range files {
@@ -60,6 +82,21 @@ func ExecuteCommand(command models.Command, files []string) {
 	}
 
 	if command.Action == models.DELETE {
+		if command.OperateOnName {
+			total := 0
+			for _, file := range files {
+				basename := filepath.Base(file)
+				if command.FilterOnName && !command.Pattern.MatchString(basename) {
+					continue
+				}
+				if deleteFile(file) {
+					total++
+				}
+			}
+			fmt.Printf("Deleted: %d files\n", total)
+			return
+		}
+
 		total := 0
 
 		if command.IsBatch {
@@ -97,16 +134,60 @@ func countMatches(filename string, pattern *regexp.Regexp) int {
 	return count
 }
 
-func selectMatches(filename string, pattern *regexp.Regexp) {
+func selectMatches(filename string, pattern *regexp.Regexp, columns []string, filterOnName bool) {
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return
 	}
 
+	showName := false
+	showContent := false
+
+	for _, col := range columns {
+		if col == "*" {
+			showName = true
+			showContent = true
+			break
+		}
+
+		if col == "name" {
+			showName = true
+		}
+
+		if col == "content" {
+			showContent = true
+		}
+	}
+
+	if filterOnName {
+		if showName && !showContent {
+			fmt.Printf("%s\n", filename)
+			return
+		}
+		if showContent && !showName {
+			fmt.Printf("%s\n", string(data))
+			return
+		}
+
+		fmt.Printf("%s\n%s\n", filename, string(data))
+		return
+	}
+
 	lines := strings.Split(string(data), "\n")
 	for i, line := range lines {
-		if pattern.MatchString(line) {
+		if !pattern.MatchString(line) {
+			continue
+		}
+		if showName && showContent {
 			fmt.Printf("%s:%d: %s\n", filename, i+1, line)
+			continue
+		}
+		if showName {
+			fmt.Printf("%s\n", filename)
+			return
+		}
+		if showContent {
+			fmt.Printf("%s\n", line)
 		}
 	}
 }
@@ -236,4 +317,25 @@ func deleteMatchesInBatch(filename string, deletions []models.Deletion) int {
 	}
 
 	return count
+}
+
+func renameFile(oldPath string, newName string) bool {
+	if !isPathInsideCwd(oldPath) {
+		return false
+	}
+
+	dir := filepath.Dir(oldPath)
+	newPath := filepath.Join(dir, newName)
+
+	err := os.Rename(oldPath, newPath)
+	return err == nil
+}
+
+func deleteFile(filename string) bool {
+	if !isPathInsideCwd(filename) {
+		return false
+	}
+
+	err := os.Remove(filename)
+	return err == nil
 }

@@ -5,14 +5,17 @@ import (
 )
 
 type Command struct {
-	Action       Action
-	File         string
-	Pattern      *regexp.Regexp
-	Replace      string
-	MatchExact   bool
-	Replacements []Replacement
-	Deletions    []Deletion
-	IsBatch      bool
+	Action        Action
+	File          string
+	Pattern       *regexp.Regexp
+	Replace       string
+	MatchExact    bool
+	Replacements  []Replacement
+	Deletions     []Deletion
+	IsBatch       bool
+	Columns       []string
+	FilterOnName  bool
+	OperateOnName bool
 }
 
 type Replacement struct {

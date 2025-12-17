@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-const SQD_VERSION = "0.0.3"
+const SQD_VERSION = "0.0.4-dev"
 
 func PrintUpdateMessage(total int) {
 	fmt.Printf("Updated: %d occurrences\n", total)

@@ -20,6 +20,7 @@ func ParseSQL(sql string) models.Command {
 
 	if strings.HasPrefix(upperSql, "SELECT") && !strings.HasPrefix(upperSql, "SELECT COUNT") {
 		command.Action = models.SELECT
+		command.Columns = extractColumns(sql)
 		command.File = extractBetween(sql, "FROM", "WHERE")
 	}
 
@@ -35,6 +36,17 @@ func ParseSQL(sql string) models.Command {
 
 	command.File = strings.TrimSpace(command.File)
 
+	if command.Action == models.UPDATE && strings.Contains(upperSql, "SET NAME") {
+		command.OperateOnName = true
+		command.Replace = extractBetween(sql, "SET name=", "WHERE")
+		command.Replace = strings.Trim(command.Replace, "'\"")
+	}
+
+	if command.Action == models.DELETE && strings.Contains(upperSql, "WHERE NAME") {
+		command.FilterOnName = true
+		command.OperateOnName = true
+	}
+
 	if command.Action == models.UPDATE && strings.Count(upperSql, "SET CONTENT=") > 1 {
 		command.IsBatch = true
 		command.Replacements = parseBatchReplacements(sql)
@@ -45,6 +57,27 @@ func ParseSQL(sql string) models.Command {
 		command.IsBatch = true
 		command.Deletions = parseBatchDeletions(sql)
 		return command
+	}
+
+	if strings.Contains(upperSql, "WHERE NAME =") || strings.Contains(upperSql, "WHERE NAME=") {
+		command.FilterOnName = true
+		command.MatchExact = true
+		idx := strings.Index(upperSql, "WHERE NAME")
+		afterWhere := sql[idx+len("WHERE NAME"):]
+		afterWhere = strings.TrimSpace(afterWhere)
+		if strings.HasPrefix(afterWhere, "=") {
+			afterWhere = strings.TrimSpace(afterWhere[1:])
+		}
+		exactMatch := strings.Trim(afterWhere, " '\"")
+		command.Pattern = regexp.MustCompile("^" + regexp.QuoteMeta(exactMatch) + "$")
+	}
+
+	if strings.Contains(upperSql, "WHERE NAME LIKE") {
+		command.FilterOnName = true
+		command.MatchExact = false
+		likePattern := extractAfter(sql, "LIKE")
+		likePattern = strings.Trim(likePattern, " '\"")
+		command.Pattern = likeToRegex(likePattern)
 	}
 
 	if strings.Contains(upperSql, "WHERE CONTENT =") {
@@ -61,7 +94,7 @@ func ParseSQL(sql string) models.Command {
 		command.Pattern = likeToRegex(likePattern)
 	}
 
-	if command.Action == models.UPDATE {
+	if command.Action == models.UPDATE && !command.OperateOnName {
 		command.Replace = extractBetween(sql, "SET content=", "WHERE")
 		command.Replace = strings.Trim(command.Replace, "'\"")
 	}
@@ -166,12 +199,36 @@ func extractAfter(query, marker string) string {
 	return strings.TrimSpace(query[index+len(markerUpper):])
 }
 
+func extractColumns(sql string) []string {
+	cols := extractBetween(sql, "SELECT", "FROM")
+	cols = strings.TrimSpace(cols)
+
+	if cols == "" || cols == "*" {
+		return []string{"*"}
+	}
+
+	parts := strings.Split(cols, ",")
+	var result []string
+	for _, part := range parts {
+		part = strings.TrimSpace(strings.ToLower(part))
+		if part != "" {
+			result = append(result, part)
+		}
+	}
+
+	return result
+}
+
 func likeToRegex(pattern string) *regexp.Regexp {
 	hasStart := strings.HasPrefix(pattern, "%")
 	hasEnd := strings.HasSuffix(pattern, "%")
 
 	pattern = strings.Trim(pattern, "%")
 	pattern = regexp.QuoteMeta(pattern)
+
+	if !hasStart && !hasEnd {
+		pattern = "^" + pattern + "$"
+	}
 
 	if !hasStart && hasEnd {
 		pattern = "^" + pattern
