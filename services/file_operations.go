@@ -5,33 +5,27 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/albertoboccolini/sqd/models"
 )
 
-type ExecutionStats struct {
-	Processed int
-	Skipped   int
-}
-
-func printProcessingErrorMessage(err error) {
-	fmt.Fprintf(os.Stderr, "%v\n", err)
-}
-
-func printStats(stats ExecutionStats) {
-	if stats.Skipped > 0 {
-		fmt.Printf("Skipped: %d files\n", stats.Skipped)
-	}
-}
-
 func ExecuteCommand(command models.Command, files []string) {
-	stats := ExecutionStats{}
+	stats := models.ExecutionStats{StartTime: time.Now()}
+
+	if command.Pattern == nil && (command.Action == models.SELECT || command.Action == models.COUNT || command.Action == models.UPDATE || command.Action == models.DELETE) {
+		if !command.IsBatch {
+			fmt.Fprintf(os.Stderr, "Error: Invalid query pattern\n")
+			return
+		}
+	}
+
 	if command.Action == models.COUNT {
 		total := 0
 		for _, file := range files {
 			count, err := countMatches(file, command.Pattern)
 			if err != nil {
-				printProcessingErrorMessage(err)
+				PrintProcessingErrorMessage(file, err)
 				stats.Skipped++
 				continue
 			}
@@ -40,7 +34,7 @@ func ExecuteCommand(command models.Command, files []string) {
 		}
 
 		fmt.Printf("%d lines matched\n", total)
-		printStats(stats)
+		PrintStats(stats)
 		return
 	}
 
@@ -48,14 +42,14 @@ func ExecuteCommand(command models.Command, files []string) {
 		for _, file := range files {
 			err := selectMatches(file, command.Pattern)
 			if err != nil {
-				printProcessingErrorMessage(err)
+				PrintProcessingErrorMessage(file, err)
 				stats.Skipped++
 				continue
 			}
 			stats.Processed++
 		}
 
-		printStats(stats)
+		PrintStats(stats)
 		return
 	}
 
@@ -65,7 +59,7 @@ func ExecuteCommand(command models.Command, files []string) {
 			for _, file := range files {
 				count, err := updateFileInBatch(file, command.Replacements)
 				if err != nil {
-					printProcessingErrorMessage(err)
+					PrintProcessingErrorMessage(file, err)
 					stats.Skipped++
 					continue
 				}
@@ -74,14 +68,14 @@ func ExecuteCommand(command models.Command, files []string) {
 			}
 
 			PrintUpdateMessage(total)
-			printStats(stats)
+			PrintStats(stats)
 			return
 		}
 
 		for _, file := range files {
 			count, err := updateFile(file, command.Pattern, command.Replace)
 			if err != nil {
-				printProcessingErrorMessage(err)
+				PrintProcessingErrorMessage(file, err)
 				stats.Skipped++
 				continue
 			}
@@ -90,7 +84,7 @@ func ExecuteCommand(command models.Command, files []string) {
 		}
 
 		PrintUpdateMessage(total)
-		printStats(stats)
+		PrintStats(stats)
 		return
 	}
 
@@ -101,7 +95,7 @@ func ExecuteCommand(command models.Command, files []string) {
 			for _, file := range files {
 				count, err := deleteMatchesInBatch(file, command.Deletions)
 				if err != nil {
-					printProcessingErrorMessage(err)
+					PrintProcessingErrorMessage(file, err)
 					stats.Skipped++
 					continue
 				}
@@ -110,14 +104,14 @@ func ExecuteCommand(command models.Command, files []string) {
 			}
 
 			fmt.Printf("Deleted: %d lines\n", total)
-			printStats(stats)
+			PrintStats(stats)
 			return
 		}
 
 		for _, file := range files {
 			count, err := deleteMatches(file, command.Pattern)
 			if err != nil {
-				printProcessingErrorMessage(err)
+				PrintProcessingErrorMessage(file, err)
 				stats.Skipped++
 				continue
 			}
@@ -126,7 +120,7 @@ func ExecuteCommand(command models.Command, files []string) {
 		}
 
 		fmt.Printf("Deleted: %d lines\n", total)
-		printStats(stats)
+		PrintStats(stats)
 	}
 }
 
