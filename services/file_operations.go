@@ -9,34 +9,53 @@ import (
 	"github.com/albertoboccolini/sqd/models"
 )
 
-func isFileBlocked(filename string) bool {
-	if !isPathInsideCwd(filename) {
-		return true
-	}
+type ExecutionStats struct {
+	Processed int
+	Skipped   int
+}
 
-	if !canWriteFile(filename) {
-		return true
-	}
+func printProcessingErrorMessage(err error) {
+	fmt.Fprintf(os.Stderr, "%v\n", err)
+}
 
-	return false
+func printStats(stats ExecutionStats) {
+	if stats.Skipped > 0 {
+		fmt.Printf("Skipped: %d files\n", stats.Skipped)
+	}
 }
 
 func ExecuteCommand(command models.Command, files []string) {
+	stats := ExecutionStats{}
 	if command.Action == models.COUNT {
 		total := 0
 		for _, file := range files {
-			total += countMatches(file, command.Pattern)
+			count, err := countMatches(file, command.Pattern)
+			if err != nil {
+				printProcessingErrorMessage(err)
+				stats.Skipped++
+				continue
+			}
+			total += count
+			stats.Processed++
 		}
 
 		fmt.Printf("%d lines matched\n", total)
+		printStats(stats)
 		return
 	}
 
 	if command.Action == models.SELECT {
 		for _, file := range files {
-			selectMatches(file, command.Pattern)
+			err := selectMatches(file, command.Pattern)
+			if err != nil {
+				printProcessingErrorMessage(err)
+				stats.Skipped++
+				continue
+			}
+			stats.Processed++
 		}
 
+		printStats(stats)
 		return
 	}
 
@@ -44,18 +63,34 @@ func ExecuteCommand(command models.Command, files []string) {
 		total := 0
 		if command.IsBatch {
 			for _, file := range files {
-				total += updateFileInBatch(file, command.Replacements)
+				count, err := updateFileInBatch(file, command.Replacements)
+				if err != nil {
+					printProcessingErrorMessage(err)
+					stats.Skipped++
+					continue
+				}
+				total += count
+				stats.Processed++
 			}
 
 			PrintUpdateMessage(total)
+			printStats(stats)
 			return
 		}
 
 		for _, file := range files {
-			total += updateFile(file, command.Pattern, command.Replace)
+			count, err := updateFile(file, command.Pattern, command.Replace)
+			if err != nil {
+				printProcessingErrorMessage(err)
+				stats.Skipped++
+				continue
+			}
+			total += count
+			stats.Processed++
 		}
 
 		PrintUpdateMessage(total)
+		printStats(stats)
 		return
 	}
 
@@ -64,25 +99,41 @@ func ExecuteCommand(command models.Command, files []string) {
 
 		if command.IsBatch {
 			for _, file := range files {
-				total += deleteMatchesInBatch(file, command.Deletions)
+				count, err := deleteMatchesInBatch(file, command.Deletions)
+				if err != nil {
+					printProcessingErrorMessage(err)
+					stats.Skipped++
+					continue
+				}
+				total += count
+				stats.Processed++
 			}
 
 			fmt.Printf("Deleted: %d lines\n", total)
+			printStats(stats)
 			return
 		}
 
 		for _, file := range files {
-			total += deleteMatches(file, command.Pattern)
+			count, err := deleteMatches(file, command.Pattern)
+			if err != nil {
+				printProcessingErrorMessage(err)
+				stats.Skipped++
+				continue
+			}
+			total += count
+			stats.Processed++
 		}
 
 		fmt.Printf("Deleted: %d lines\n", total)
+		printStats(stats)
 	}
 }
 
-func countMatches(filename string, pattern *regexp.Regexp) int {
+func countMatches(filename string, pattern *regexp.Regexp) (int, error) {
 	data, err := os.ReadFile(filename)
 	if err != nil {
-		return 0
+		return 0, err
 	}
 
 	lines := strings.Split(string(data), "\n")
@@ -94,13 +145,13 @@ func countMatches(filename string, pattern *regexp.Regexp) int {
 		}
 	}
 
-	return count
+	return count, nil
 }
 
-func selectMatches(filename string, pattern *regexp.Regexp) {
+func selectMatches(filename string, pattern *regexp.Regexp) error {
 	data, err := os.ReadFile(filename)
 	if err != nil {
-		return
+		return err
 	}
 
 	lines := strings.Split(string(data), "\n")
@@ -109,16 +160,22 @@ func selectMatches(filename string, pattern *regexp.Regexp) {
 			fmt.Printf("%s:%d: %s\n", filename, i+1, line)
 		}
 	}
+
+	return nil
 }
 
-func updateFile(filename string, pattern *regexp.Regexp, replace string) int {
-	if isFileBlocked(filename) {
-		return 0
+func updateFile(filename string, pattern *regexp.Regexp, replace string) (int, error) {
+	if !isPathInsideCwd(filename) {
+		return 0, fmt.Errorf("invalid path detected: %s", filename)
+	}
+
+	if !canWriteFile(filename) {
+		return 0, fmt.Errorf("permission denied")
 	}
 
 	data, err := os.ReadFile(filename)
 	if err != nil {
-		return 0
+		return 0, err
 	}
 
 	lines := strings.Split(string(data), "\n")
@@ -132,22 +189,29 @@ func updateFile(filename string, pattern *regexp.Regexp, replace string) int {
 	}
 
 	if count > 0 {
-		os.WriteFile(filename, []byte(strings.Join(lines, "\n")), 0644)
+		err = os.WriteFile(filename, []byte(strings.Join(lines, "\n")), 0644)
+		if err != nil {
+			return 0, err
+		}
 	}
 
-	return count
+	return count, nil
 }
 
 // updateFileInBatch applies multiple replacements to the file in a single pass.
 // This is more efficient than applying each replacement separately.
-func updateFileInBatch(filename string, replacements []models.Replacement) int {
-	if isFileBlocked(filename) {
-		return 0
+func updateFileInBatch(filename string, replacements []models.Replacement) (int, error) {
+	if !isPathInsideCwd(filename) {
+		return 0, fmt.Errorf("invalid path detected: %s", filename)
+	}
+
+	if !canWriteFile(filename) {
+		return 0, fmt.Errorf("permission denied")
 	}
 
 	data, err := os.ReadFile(filename)
 	if err != nil {
-		return 0
+		return 0, err
 	}
 
 	lines := strings.Split(string(data), "\n")
@@ -164,20 +228,27 @@ func updateFileInBatch(filename string, replacements []models.Replacement) int {
 	}
 
 	if count > 0 {
-		os.WriteFile(filename, []byte(strings.Join(lines, "\n")), 0644)
+		err = os.WriteFile(filename, []byte(strings.Join(lines, "\n")), 0644)
+		if err != nil {
+			return 0, err
+		}
 	}
 
-	return count
+	return count, nil
 }
 
-func deleteMatches(filename string, pattern *regexp.Regexp) int {
-	if isFileBlocked(filename) {
-		return 0
+func deleteMatches(filename string, pattern *regexp.Regexp) (int, error) {
+	if !isPathInsideCwd(filename) {
+		return 0, fmt.Errorf("invalid path detected: %s", filename)
+	}
+
+	if !canWriteFile(filename) {
+		return 0, fmt.Errorf("permission denied")
 	}
 
 	data, err := os.ReadFile(filename)
 	if err != nil {
-		return 0
+		return 0, err
 	}
 
 	lines := strings.Split(string(data), "\n")
@@ -193,22 +264,29 @@ func deleteMatches(filename string, pattern *regexp.Regexp) int {
 	}
 
 	if count > 0 {
-		os.WriteFile(filename, []byte(strings.Join(filtered, "\n")), 0644)
+		err = os.WriteFile(filename, []byte(strings.Join(filtered, "\n")), 0644)
+		if err != nil {
+			return 0, err
+		}
 	}
 
-	return count
+	return count, nil
 }
 
 // deleteMatchesInBatch applies multiple deletions to the file in a single pass.
 // This is more efficient than applying each deletion separately.
-func deleteMatchesInBatch(filename string, deletions []models.Deletion) int {
-	if isFileBlocked(filename) {
-		return 0
+func deleteMatchesInBatch(filename string, deletions []models.Deletion) (int, error) {
+	if !isPathInsideCwd(filename) {
+		return 0, fmt.Errorf("invalid path detected: %s", filename)
+	}
+
+	if !canWriteFile(filename) {
+		return 0, fmt.Errorf("permission denied")
 	}
 
 	data, err := os.ReadFile(filename)
 	if err != nil {
-		return 0
+		return 0, err
 	}
 
 	lines := strings.Split(string(data), "\n")
@@ -232,8 +310,11 @@ func deleteMatchesInBatch(filename string, deletions []models.Deletion) int {
 	}
 
 	if count > 0 {
-		os.WriteFile(filename, []byte(strings.Join(filtered, "\n")), 0644)
+		err = os.WriteFile(filename, []byte(strings.Join(filtered, "\n")), 0644)
+		if err != nil {
+			return 0, err
+		}
 	}
 
-	return count
+	return count, nil
 }
