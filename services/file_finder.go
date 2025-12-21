@@ -9,6 +9,8 @@ import (
 
 const maxTextFileSize = 100 * 1024 * 1024
 
+// If the file cannot be stat'ed or opened, the function returns true so that
+// callers like FindFiles do not silently skip those paths.
 func IsTextFile(path string) bool {
 	info, err := os.Stat(path)
 	if err != nil {

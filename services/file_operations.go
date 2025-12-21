@@ -13,11 +13,12 @@ import (
 func ExecuteCommand(command models.Command, files []string) {
 	stats := models.ExecutionStats{StartTime: time.Now()}
 
-	if command.Pattern == nil && (command.Action == models.SELECT || command.Action == models.COUNT || command.Action == models.UPDATE || command.Action == models.DELETE) {
-		if !command.IsBatch {
-			fmt.Fprintf(os.Stderr, "Error: Invalid query pattern\n")
-			return
-		}
+	if command.Pattern == nil && ((command.Action == models.SELECT ||
+		command.Action == models.COUNT ||
+		command.Action == models.UPDATE ||
+		command.Action == models.DELETE) && !command.IsBatch) {
+		fmt.Fprintf(os.Stderr, "Error: Invalid query pattern\n")
+		return
 	}
 
 	if command.Action == models.COUNT {

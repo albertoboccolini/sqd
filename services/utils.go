@@ -22,7 +22,7 @@ func PrintProcessingErrorMessage(file string, err error) {
 
 func PrintStats(stats models.ExecutionStats) {
 	elapsed := time.Since(stats.StartTime).Seconds()
-	fmt.Printf("Processed: %d files in %.2fms\n", stats.Processed, elapsed*1000)
+	fmt.Printf("Processed: %d files in %.2fms\n", stats.Processed, elapsed*1000) // in milliseconds
 	if stats.Skipped > 0 {
 		fmt.Printf("Skipped: %d files\n", stats.Skipped)
 	}
