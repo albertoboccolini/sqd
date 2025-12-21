@@ -28,7 +28,7 @@ func PrintStats(stats models.ExecutionStats) {
 	}
 }
 
-func isPathInsideCwd(path string) bool {
+func IsPathInsideCwd(path string) bool {
 	currentWorkingDir, err := os.Getwd()
 	if err != nil {
 		return false
