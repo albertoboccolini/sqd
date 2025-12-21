@@ -160,7 +160,7 @@ func selectMatches(filename string, pattern *regexp.Regexp) error {
 }
 
 func updateFile(filename string, pattern *regexp.Regexp, replace string) (int, error) {
-	if !isPathInsideCwd(filename) {
+	if !IsPathInsideCwd(filename) {
 		return 0, fmt.Errorf("invalid path detected: %s", filename)
 	}
 
@@ -196,7 +196,7 @@ func updateFile(filename string, pattern *regexp.Regexp, replace string) (int, e
 // updateFileInBatch applies multiple replacements to the file in a single pass.
 // This is more efficient than applying each replacement separately.
 func updateFileInBatch(filename string, replacements []models.Replacement) (int, error) {
-	if !isPathInsideCwd(filename) {
+	if !IsPathInsideCwd(filename) {
 		return 0, fmt.Errorf("invalid path detected: %s", filename)
 	}
 
@@ -233,7 +233,7 @@ func updateFileInBatch(filename string, replacements []models.Replacement) (int,
 }
 
 func deleteMatches(filename string, pattern *regexp.Regexp) (int, error) {
-	if !isPathInsideCwd(filename) {
+	if !IsPathInsideCwd(filename) {
 		return 0, fmt.Errorf("invalid path detected: %s", filename)
 	}
 
@@ -271,7 +271,7 @@ func deleteMatches(filename string, pattern *regexp.Regexp) (int, error) {
 // deleteMatchesInBatch applies multiple deletions to the file in a single pass.
 // This is more efficient than applying each deletion separately.
 func deleteMatchesInBatch(filename string, deletions []models.Deletion) (int, error) {
-	if !isPathInsideCwd(filename) {
+	if !IsPathInsideCwd(filename) {
 		return 0, fmt.Errorf("invalid path detected: %s", filename)
 	}
 

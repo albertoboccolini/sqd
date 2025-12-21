@@ -59,7 +59,7 @@ func FindFiles(pattern string) []string {
 			return nil
 		}
 
-		if !isPathInsideCwd(path) {
+		if !IsPathInsideCwd(path) {
 			return nil
 		}
 
