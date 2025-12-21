@@ -5,12 +5,27 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
+
+	"github.com/albertoboccolini/sqd/models"
 )
 
 const SQD_VERSION = "0.0.3"
 
 func PrintUpdateMessage(total int) {
 	fmt.Printf("Updated: %d occurrences\n", total)
+}
+
+func PrintProcessingErrorMessage(file string, err error) {
+	fmt.Fprintf(os.Stderr, "%s: %v\n", file, err)
+}
+
+func PrintStats(stats models.ExecutionStats) {
+	elapsed := time.Since(stats.StartTime).Seconds()
+	fmt.Printf("Processed: %d files in %.2fms\n", stats.Processed, elapsed*1000) // in milliseconds
+	if stats.Skipped > 0 {
+		fmt.Printf("Skipped: %d files\n", stats.Skipped)
+	}
 }
 
 func isPathInsideCwd(path string) bool {

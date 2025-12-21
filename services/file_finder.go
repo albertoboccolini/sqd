@@ -9,12 +9,12 @@ import (
 
 const maxTextFileSize = 100 * 1024 * 1024
 
-// IsTextFile checks if a file is a text file by reading its content and looking for non-text bytes.
-// This is necessary because some files may have text-like extensions but contain binary data.
+// If the file cannot be stat'ed or opened, the function returns true so that
+// callers like FindFiles do not silently skip those paths.
 func IsTextFile(path string) bool {
 	info, err := os.Stat(path)
 	if err != nil {
-		return false
+		return true
 	}
 
 	if info.Size() > maxTextFileSize {
@@ -23,7 +23,7 @@ func IsTextFile(path string) bool {
 
 	file, err := os.Open(path)
 	if err != nil {
-		return false
+		return true
 	}
 
 	defer file.Close()
@@ -45,9 +45,6 @@ func IsTextFile(path string) bool {
 
 func FindFiles(pattern string) []string {
 	if !strings.Contains(pattern, "*") {
-		if !isPathInsideCwd(pattern) {
-			return []string{}
-		}
 		return []string{pattern}
 	}
 
