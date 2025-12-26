@@ -47,11 +47,15 @@ func ParseSQL(sql string) models.Command {
 		return command
 	}
 
-	if strings.Contains(upperSql, "WHERE CONTENT =") {
-		command.MatchExact = true
-		exactMatch := extractAfter(sql, "WHERE content =")
-		exactMatch = strings.Trim(exactMatch, " '\"")
-		command.Pattern = regexp.MustCompile("^" + regexp.QuoteMeta(exactMatch) + "$")
+	if strings.Contains(upperSql, "WHERE CONTENT") {
+		whereContentRegex := regexp.MustCompile(`(?i)WHERE\s+content\s*=\s*`)
+		loc := whereContentRegex.FindStringIndex(sql)
+		if loc != nil {
+			command.MatchExact = true
+			exactMatch := strings.TrimSpace(sql[loc[1]:])
+			exactMatch = strings.Trim(exactMatch, " '\"")
+			command.Pattern = regexp.MustCompile("^" + regexp.QuoteMeta(exactMatch) + "$")
+		}
 	}
 
 	if strings.Contains(upperSql, "WHERE CONTENT LIKE") {
@@ -62,8 +66,17 @@ func ParseSQL(sql string) models.Command {
 	}
 
 	if command.Action == models.UPDATE {
-		command.Replace = extractBetween(sql, "SET content=", "WHERE")
-		command.Replace = strings.Trim(command.Replace, "'\"")
+		setContentRegex := regexp.MustCompile(`(?i)SET\s+content\s*=\s*`)
+		whereIdx := strings.Index(upperSql, "WHERE")
+		if whereIdx == -1 {
+			whereIdx = len(sql)
+		}
+
+		loc := setContentRegex.FindStringIndex(sql)
+		if loc != nil {
+			command.Replace = strings.TrimSpace(sql[loc[1]:whereIdx])
+			command.Replace = strings.Trim(command.Replace, " '\"")
+		}
 	}
 
 	return command

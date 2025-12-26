@@ -334,7 +334,7 @@ func deleteMatchesInBatch(filename string, deletions []models.Deletion) (int, er
 	return count, nil
 }
 
-func executeUpdateTransaction(command models.Command, files []string, stats *models.ExecutionStats) {
+func checkFilesBeforeTransaction(files []string) {
 	for _, file := range files {
 		if !IsPathInsideCwd(file) {
 			fmt.Fprintf(os.Stderr, "Transaction failed: invalid path %s\n", file)
@@ -345,6 +345,10 @@ func executeUpdateTransaction(command models.Command, files []string, stats *mod
 			return
 		}
 	}
+}
+
+func executeUpdateTransaction(command models.Command, files []string, stats *models.ExecutionStats) {
+	checkFilesBeforeTransaction(files)
 
 	backups := make([]fileBackup, 0, len(files))
 	total := 0
@@ -360,6 +364,7 @@ func executeUpdateTransaction(command models.Command, files []string, stats *mod
 
 		var count int
 		var err error
+
 		if command.IsBatch {
 			count, err = updateFileInBatch(backupPath, command.Replacements)
 		} else {
@@ -387,16 +392,7 @@ func executeUpdateTransaction(command models.Command, files []string, stats *mod
 }
 
 func executeDeleteTransaction(command models.Command, files []string, stats *models.ExecutionStats) {
-	for _, file := range files {
-		if !IsPathInsideCwd(file) {
-			fmt.Fprintf(os.Stderr, "Transaction failed: invalid path %s\n", file)
-			return
-		}
-		if !canWriteFile(file) {
-			fmt.Fprintf(os.Stderr, "Transaction failed: cannot write %s\n", file)
-			return
-		}
-	}
+	checkFilesBeforeTransaction(files)
 
 	backups := make([]fileBackup, 0, len(files))
 	total := 0
@@ -412,6 +408,7 @@ func executeDeleteTransaction(command models.Command, files []string, stats *mod
 
 		var count int
 		var err error
+
 		if command.IsBatch {
 			count, err = deleteMatchesInBatch(backupPath, command.Deletions)
 		} else {
