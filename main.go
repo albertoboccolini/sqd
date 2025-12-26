@@ -12,6 +12,8 @@ import (
 func main() {
 	versionFlag := flag.Bool("version", false, "Print version information")
 	flag.BoolVar(versionFlag, "v", false, "Print version information")
+	transactionFlag := flag.Bool("transaction", false, "Enable transaction mode with rollback on failure")
+	flag.BoolVar(transactionFlag, "t", false, "Enable transaction mode with rollback on failure")
 	flag.Parse()
 
 	if *versionFlag {
@@ -30,7 +32,8 @@ func main() {
 		fmt.Println("  sqd 'UPDATE file.txt SET old TO new WHERE content = match, SET foo TO bar WHERE content = other'")
 		fmt.Println("  sqd 'DELETE FROM file.txt WHERE content = exact_match'")
 		fmt.Println("\nFlags:")
-		fmt.Println("  -v, --version    Show the version information")
+		fmt.Println("  -t, --transaction	Enable transaction mode with rollback on failure")
+		fmt.Println("  -v, --version		Show the version information")
 		os.Exit(1)
 	}
 
@@ -43,5 +46,5 @@ func main() {
 		os.Exit(1)
 	}
 
-	services.ExecuteCommand(cmd, files)
+	services.ExecuteCommand(cmd, files, *transactionFlag)
 }
