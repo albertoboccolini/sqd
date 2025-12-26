@@ -12,6 +12,8 @@ import (
 func main() {
 	versionFlag := flag.Bool("version", false, "Print version information")
 	flag.BoolVar(versionFlag, "v", false, "Print version information")
+	transactionFlag := flag.Bool("transaction", false, "Enable transaction mode with rollback on failure")
+	flag.BoolVar(transactionFlag, "t", false, "Enable transaction mode with rollback on failure")
 	flag.Parse()
 
 	if *versionFlag {
@@ -43,5 +45,5 @@ func main() {
 		os.Exit(1)
 	}
 
-	services.ExecuteCommand(cmd, files)
+	services.ExecuteCommand(cmd, files, *transactionFlag)
 }

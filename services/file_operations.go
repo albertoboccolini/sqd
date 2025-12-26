@@ -10,7 +10,12 @@ import (
 	"github.com/albertoboccolini/sqd/models"
 )
 
-func ExecuteCommand(command models.Command, files []string) {
+type fileBackup struct {
+	original string
+	backup   string
+}
+
+func ExecuteCommand(command models.Command, files []string, useTransaction bool) {
 	stats := models.ExecutionStats{StartTime: time.Now()}
 
 	if command.Pattern == nil && ((command.Action == models.SELECT ||
@@ -18,6 +23,11 @@ func ExecuteCommand(command models.Command, files []string) {
 		command.Action == models.UPDATE ||
 		command.Action == models.DELETE) && !command.IsBatch) {
 		fmt.Fprintf(os.Stderr, "Error: Invalid query pattern\n")
+		return
+	}
+
+	if command.Action == models.UPDATE && !command.IsBatch && command.Replace == "" {
+		fmt.Fprintf(os.Stderr, "Error: Invalid replacement value\n")
 		return
 	}
 
@@ -55,6 +65,11 @@ func ExecuteCommand(command models.Command, files []string) {
 	}
 
 	if command.Action == models.UPDATE {
+		if useTransaction {
+			executeUpdateTransaction(command, files, &stats)
+			return
+		}
+
 		total := 0
 		if command.IsBatch {
 			for _, file := range files {
@@ -90,6 +105,11 @@ func ExecuteCommand(command models.Command, files []string) {
 	}
 
 	if command.Action == models.DELETE {
+		if useTransaction {
+			executeDeleteTransaction(command, files, &stats)
+			return
+		}
+
 		total := 0
 
 		if command.IsBatch {
@@ -312,4 +332,114 @@ func deleteMatchesInBatch(filename string, deletions []models.Deletion) (int, er
 	}
 
 	return count, nil
+}
+
+func executeUpdateTransaction(command models.Command, files []string, stats *models.ExecutionStats) {
+	for _, file := range files {
+		if !IsPathInsideCwd(file) {
+			fmt.Fprintf(os.Stderr, "Transaction failed: invalid path %s\n", file)
+			return
+		}
+		if !canWriteFile(file) {
+			fmt.Fprintf(os.Stderr, "Transaction failed: cannot write %s\n", file)
+			return
+		}
+	}
+
+	backups := make([]fileBackup, 0, len(files))
+	total := 0
+
+	for _, file := range files {
+		backupPath := file + ".sqd_backup"
+		if err := os.Rename(file, backupPath); err != nil {
+			rollbackFiles(backups)
+			fmt.Fprintf(os.Stderr, "Transaction failed: %v\n", err)
+			return
+		}
+		backups = append(backups, fileBackup{original: file, backup: backupPath})
+
+		var count int
+		var err error
+		if command.IsBatch {
+			count, err = updateFileInBatch(backupPath, command.Replacements)
+		} else {
+			count, err = updateFile(backupPath, command.Pattern, command.Replace)
+		}
+
+		if err != nil {
+			rollbackFiles(backups)
+			fmt.Fprintf(os.Stderr, "Transaction failed: %v\n", err)
+			return
+		}
+
+		if err := os.Rename(backupPath, file); err != nil {
+			rollbackFiles(backups)
+			fmt.Fprintf(os.Stderr, "Transaction failed: %v\n", err)
+			return
+		}
+
+		total += count
+		stats.Processed++
+	}
+
+	PrintUpdateMessage(total)
+	PrintStats(*stats)
+}
+
+func executeDeleteTransaction(command models.Command, files []string, stats *models.ExecutionStats) {
+	for _, file := range files {
+		if !IsPathInsideCwd(file) {
+			fmt.Fprintf(os.Stderr, "Transaction failed: invalid path %s\n", file)
+			return
+		}
+		if !canWriteFile(file) {
+			fmt.Fprintf(os.Stderr, "Transaction failed: cannot write %s\n", file)
+			return
+		}
+	}
+
+	backups := make([]fileBackup, 0, len(files))
+	total := 0
+
+	for _, file := range files {
+		backupPath := file + ".sqd_backup"
+		if err := os.Rename(file, backupPath); err != nil {
+			rollbackFiles(backups)
+			fmt.Fprintf(os.Stderr, "Transaction failed: %v\n", err)
+			return
+		}
+		backups = append(backups, fileBackup{original: file, backup: backupPath})
+
+		var count int
+		var err error
+		if command.IsBatch {
+			count, err = deleteMatchesInBatch(backupPath, command.Deletions)
+		} else {
+			count, err = deleteMatches(backupPath, command.Pattern)
+		}
+
+		if err != nil {
+			rollbackFiles(backups)
+			fmt.Fprintf(os.Stderr, "Transaction failed: %v\n", err)
+			return
+		}
+
+		if err := os.Rename(backupPath, file); err != nil {
+			rollbackFiles(backups)
+			fmt.Fprintf(os.Stderr, "Transaction failed: %v\n", err)
+			return
+		}
+
+		total += count
+		stats.Processed++
+	}
+
+	fmt.Printf("Deleted: %d lines\n", total)
+	PrintStats(*stats)
+}
+
+func rollbackFiles(backups []fileBackup) {
+	for _, b := range backups {
+		os.Rename(b.backup, b.original)
+	}
 }
