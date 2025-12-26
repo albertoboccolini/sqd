@@ -32,8 +32,8 @@ func main() {
 		fmt.Println("  sqd 'UPDATE file.txt SET old TO new WHERE content = match, SET foo TO bar WHERE content = other'")
 		fmt.Println("  sqd 'DELETE FROM file.txt WHERE content = exact_match'")
 		fmt.Println("\nFlags:")
-		fmt.Println("  -t, --transaction    Enable transaction mode with rollback on failure")
-		fmt.Println("  -v, --version    Show the version information")
+		fmt.Println("  -t, --transaction	Enable transaction mode with rollback on failure")
+		fmt.Println("  -v, --version		Show the version information")
 		os.Exit(1)
 	}
 

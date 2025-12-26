@@ -338,11 +338,11 @@ func checkFilesBeforeTransaction(files []string) {
 	for _, file := range files {
 		if !IsPathInsideCwd(file) {
 			fmt.Fprintf(os.Stderr, "Transaction failed: invalid path %s\n", file)
-			return
+			os.Exit(1)
 		}
 		if !canWriteFile(file) {
 			fmt.Fprintf(os.Stderr, "Transaction failed: cannot write %s\n", file)
-			return
+			os.Exit(1)
 		}
 	}
 }
@@ -436,7 +436,9 @@ func executeDeleteTransaction(command models.Command, files []string, stats *mod
 }
 
 func rollbackFiles(backups []fileBackup) {
-	for _, b := range backups {
-		os.Rename(b.backup, b.original)
+	for _, backup := range backups {
+		if err := os.Rename(backup.backup, backup.original); err != nil {
+			fmt.Fprintf(os.Stderr, "Rollback failed for %s -> %s: %v\n", backup.backup, backup.original, err)
+		}
 	}
 }
