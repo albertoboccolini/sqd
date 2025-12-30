@@ -16,9 +16,12 @@ func TestTransactionPreservesFilePermissions(t *testing.T) {
 
 	originalInfo, _ := os.Stat(file)
 	originalMode := originalInfo.Mode()
+	utils := services.NewUtils()
+	sqlParser := services.NewSQLParser()
 
-	cmd := services.ParseSQL("UPDATE test.txt SET content='NEW' WHERE content = 'content'")
-	services.ExecuteCommand(cmd, []string{file}, true)
+	cmd := sqlParser.ParseSQL("UPDATE test.txt SET content='NEW' WHERE content = 'content'")
+	fileOperator := services.NewFileOperator(utils)
+	fileOperator.ExecuteCommand(cmd, []string{file}, true)
 
 	newInfo, _ := os.Stat(file)
 	if newInfo.Mode() != originalMode {
@@ -31,9 +34,12 @@ func TestTransactionEmptyFileHandling(t *testing.T) {
 	file := filepath.Join(cwd, "test.txt")
 	os.WriteFile(file, []byte(""), 0644)
 	defer os.Remove(file)
+	utils := services.NewUtils()
+	sqlParser := services.NewSQLParser()
 
-	cmd := services.ParseSQL("UPDATE test.txt SET content='NEW' WHERE content = 'nonexistent'")
-	services.ExecuteCommand(cmd, []string{file}, true)
+	cmd := sqlParser.ParseSQL("UPDATE test.txt SET content='NEW' WHERE content = 'nonexistent'")
+	fileOperator := services.NewFileOperator(utils)
+	fileOperator.ExecuteCommand(cmd, []string{file}, true)
 
 	result, _ := os.ReadFile(file)
 	if string(result) != "" {
@@ -47,9 +53,13 @@ func TestTransactionWithTrailingNewline(t *testing.T) {
 	content := "line1\nline2\nline3\n"
 	os.WriteFile(file, []byte(content), 0644)
 	defer os.Remove(file)
+	utils := services.NewUtils()
+	sqlParser := services.NewSQLParser()
 
-	cmd := services.ParseSQL("UPDATE test.txt SET content='UPDATED' WHERE content = 'line2'")
-	services.ExecuteCommand(cmd, []string{file}, true)
+	cmd := sqlParser.ParseSQL("UPDATE test.txt SET content='UPDATED' WHERE content = 'line2'")
+
+	fileOperator := services.NewFileOperator(utils)
+	fileOperator.ExecuteCommand(cmd, []string{file}, true)
 
 	result, _ := os.ReadFile(file)
 	expected := "line1\nUPDATED\nline3\n"
@@ -72,8 +82,13 @@ func TestTransactionMultipleFilesSuccess(t *testing.T) {
 	defer os.Remove(file2)
 	defer os.Remove(file3)
 
-	cmd := services.ParseSQL("UPDATE *.txt SET content='CHANGED' WHERE content LIKE 'test'")
-	services.ExecuteCommand(cmd, []string{file1, file2, file3}, true)
+	utils := services.NewUtils()
+	sqlParser := services.NewSQLParser()
+
+	cmd := sqlParser.ParseSQL("UPDATE *.txt SET content='CHANGED' WHERE content LIKE 'test'")
+
+	fileOperator := services.NewFileOperator(utils)
+	fileOperator.ExecuteCommand(cmd, []string{file1, file2, file3}, true)
 
 	result1, _ := os.ReadFile(file1)
 	result2, _ := os.ReadFile(file2)
