@@ -40,7 +40,7 @@ func main() {
 	sql := strings.Join(flag.Args(), " ")
 
 	sqlParser := services.NewSQLParser()
-	cmd := sqlParser.ParseSQL(sql)
+	cmd := sqlParser.Parse(sql)
 
 	fileFinder := services.NewFileFinder()
 

@@ -13,7 +13,7 @@ func NewSQLParser() *SQLParser {
 	return &SQLParser{}
 }
 
-func (parser *SQLParser) ParseSQL(sql string) models.Command {
+func (sqlParser *SQLParser) Parse(sql string) models.Command {
 	sql = strings.TrimSpace(sql)
 	upperSql := strings.ToUpper(sql)
 
@@ -21,35 +21,35 @@ func (parser *SQLParser) ParseSQL(sql string) models.Command {
 
 	if strings.HasPrefix(upperSql, "SELECT COUNT") {
 		command.Action = models.COUNT
-		command.File = parser.extractBetween(sql, "FROM", "WHERE")
+		command.File = sqlParser.extractBetween(sql, "FROM", "WHERE")
 	}
 
 	if strings.HasPrefix(upperSql, "SELECT") && !strings.HasPrefix(upperSql, "SELECT COUNT") {
 		command.Action = models.SELECT
-		command.File = parser.extractBetween(sql, "FROM", "WHERE")
+		command.File = sqlParser.extractBetween(sql, "FROM", "WHERE")
 	}
 
 	if strings.HasPrefix(upperSql, "UPDATE") {
 		command.Action = models.UPDATE
-		command.File = parser.extractBetween(sql, "UPDATE", "SET")
+		command.File = sqlParser.extractBetween(sql, "UPDATE", "SET")
 	}
 
 	if strings.HasPrefix(upperSql, "DELETE") {
 		command.Action = models.DELETE
-		command.File = parser.extractBetween(sql, "DELETE FROM", "WHERE")
+		command.File = sqlParser.extractBetween(sql, "DELETE FROM", "WHERE")
 	}
 
 	command.File = strings.TrimSpace(command.File)
 
 	if command.Action == models.UPDATE && strings.Count(upperSql, "SET CONTENT=") > 1 {
 		command.IsBatch = true
-		command.Replacements = parser.parseBatchReplacements(sql)
+		command.Replacements = sqlParser.parseBatchReplacements(sql)
 		return command
 	}
 
 	if command.Action == models.DELETE && strings.Count(upperSql, "WHERE CONTENT =") > 1 {
 		command.IsBatch = true
-		command.Deletions = parser.parseBatchDeletions(sql)
+		command.Deletions = sqlParser.parseBatchDeletions(sql)
 		return command
 	}
 
@@ -66,9 +66,9 @@ func (parser *SQLParser) ParseSQL(sql string) models.Command {
 
 	if strings.Contains(upperSql, "WHERE CONTENT LIKE") {
 		command.MatchExact = false
-		likePattern := parser.extractAfter(sql, "LIKE")
+		likePattern := sqlParser.extractAfter(sql, "LIKE")
 		likePattern = strings.Trim(likePattern, " '\"")
-		command.Pattern = parser.likeToRegex(likePattern)
+		command.Pattern = sqlParser.likeToRegex(likePattern)
 	}
 
 	if command.Action == models.UPDATE {
@@ -88,7 +88,7 @@ func (parser *SQLParser) ParseSQL(sql string) models.Command {
 	return command
 }
 
-func (parser *SQLParser) parseBatchDeletions(sql string) []models.Deletion {
+func (sqlParser *SQLParser) parseBatchDeletions(sql string) []models.Deletion {
 	var deletions []models.Deletion
 
 	parts := strings.SplitSeq(sql, ",")
@@ -104,7 +104,7 @@ func (parser *SQLParser) parseBatchDeletions(sql string) []models.Deletion {
 		var del models.Deletion
 		del.MatchExact = true
 
-		exactMatch := parser.extractAfter(part, "WHERE content =")
+		exactMatch := sqlParser.extractAfter(part, "WHERE content =")
 		exactMatch = strings.Trim(exactMatch, " '\"")
 		del.Pattern = regexp.MustCompile("^" + regexp.QuoteMeta(exactMatch) + "$")
 
@@ -114,7 +114,7 @@ func (parser *SQLParser) parseBatchDeletions(sql string) []models.Deletion {
 	return deletions
 }
 
-func (parser *SQLParser) parseBatchReplacements(sql string) []models.Replacement {
+func (sqlParser *SQLParser) parseBatchReplacements(sql string) []models.Replacement {
 	var replacements []models.Replacement
 
 	parts := strings.SplitSeq(sql, ",")
@@ -129,22 +129,22 @@ func (parser *SQLParser) parseBatchReplacements(sql string) []models.Replacement
 
 		var repl models.Replacement
 
-		replaceValue := parser.extractBetween(part, "SET content=", "WHERE")
+		replaceValue := sqlParser.extractBetween(part, "SET content=", "WHERE")
 		replaceValue = strings.Trim(replaceValue, " '\"")
 		repl.Replace = replaceValue
 
 		if strings.Contains(upperPart, "WHERE CONTENT =") {
 			repl.MatchExact = true
-			exactMatch := parser.extractAfter(part, "WHERE content =")
+			exactMatch := sqlParser.extractAfter(part, "WHERE content =")
 			exactMatch = strings.Trim(exactMatch, " '\"")
 			repl.Pattern = regexp.MustCompile("^" + regexp.QuoteMeta(exactMatch) + "$")
 		}
 
 		if strings.Contains(upperPart, "WHERE CONTENT LIKE") {
 			repl.MatchExact = false
-			likePattern := parser.extractAfter(part, "LIKE")
+			likePattern := sqlParser.extractAfter(part, "LIKE")
 			likePattern = strings.Trim(likePattern, " '\"")
-			repl.Pattern = parser.likeToRegex(likePattern)
+			repl.Pattern = sqlParser.likeToRegex(likePattern)
 		}
 
 		replacements = append(replacements, repl)
@@ -153,7 +153,7 @@ func (parser *SQLParser) parseBatchReplacements(sql string) []models.Replacement
 	return replacements
 }
 
-func (parser *SQLParser) extractBetween(query, start, end string) string {
+func (sqlParser *SQLParser) extractBetween(query, start, end string) string {
 	upperStart := strings.ToUpper(start)
 	upperEnd := strings.ToUpper(end)
 	upperQuery := strings.ToUpper(query)
@@ -173,7 +173,7 @@ func (parser *SQLParser) extractBetween(query, start, end string) string {
 	return strings.TrimSpace(query[startIndex : startIndex+endIndex])
 }
 
-func (parser *SQLParser) extractAfter(query, marker string) string {
+func (sqlParser *SQLParser) extractAfter(query, marker string) string {
 	markerUpper := strings.ToUpper(marker)
 	upperQuery := strings.ToUpper(query)
 
@@ -185,7 +185,7 @@ func (parser *SQLParser) extractAfter(query, marker string) string {
 	return strings.TrimSpace(query[index+len(markerUpper):])
 }
 
-func (parser *SQLParser) likeToRegex(pattern string) *regexp.Regexp {
+func (sqlParser *SQLParser) likeToRegex(pattern string) *regexp.Regexp {
 	hasStart := strings.HasPrefix(pattern, "%")
 	hasEnd := strings.HasSuffix(pattern, "%")
 

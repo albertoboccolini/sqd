@@ -16,10 +16,12 @@ func TestTransactionPreservesFilePermissions(t *testing.T) {
 
 	originalInfo, _ := os.Stat(file)
 	originalMode := originalInfo.Mode()
+
 	utils := services.NewUtils()
 	sqlParser := services.NewSQLParser()
 
-	cmd := sqlParser.ParseSQL("UPDATE test.txt SET content='NEW' WHERE content = 'content'")
+	cmd := sqlParser.Parse("UPDATE test.txt SET content='NEW' WHERE content = 'content'")
+
 	fileOperator := services.NewFileOperator(utils)
 	fileOperator.ExecuteCommand(cmd, []string{file}, true)
 
@@ -34,10 +36,12 @@ func TestTransactionEmptyFileHandling(t *testing.T) {
 	file := filepath.Join(cwd, "test.txt")
 	os.WriteFile(file, []byte(""), 0644)
 	defer os.Remove(file)
+
 	utils := services.NewUtils()
 	sqlParser := services.NewSQLParser()
 
-	cmd := sqlParser.ParseSQL("UPDATE test.txt SET content='NEW' WHERE content = 'nonexistent'")
+	cmd := sqlParser.Parse("UPDATE test.txt SET content='NEW' WHERE content = 'nonexistent'")
+
 	fileOperator := services.NewFileOperator(utils)
 	fileOperator.ExecuteCommand(cmd, []string{file}, true)
 
@@ -53,10 +57,11 @@ func TestTransactionWithTrailingNewline(t *testing.T) {
 	content := "line1\nline2\nline3\n"
 	os.WriteFile(file, []byte(content), 0644)
 	defer os.Remove(file)
+
 	utils := services.NewUtils()
 	sqlParser := services.NewSQLParser()
 
-	cmd := sqlParser.ParseSQL("UPDATE test.txt SET content='UPDATED' WHERE content = 'line2'")
+	cmd := sqlParser.Parse("UPDATE test.txt SET content='UPDATED' WHERE content = 'line2'")
 
 	fileOperator := services.NewFileOperator(utils)
 	fileOperator.ExecuteCommand(cmd, []string{file}, true)
@@ -85,7 +90,7 @@ func TestTransactionMultipleFilesSuccess(t *testing.T) {
 	utils := services.NewUtils()
 	sqlParser := services.NewSQLParser()
 
-	cmd := sqlParser.ParseSQL("UPDATE *.txt SET content='CHANGED' WHERE content LIKE 'test'")
+	cmd := sqlParser.Parse("UPDATE *.txt SET content='CHANGED' WHERE content LIKE 'test'")
 
 	fileOperator := services.NewFileOperator(utils)
 	fileOperator.ExecuteCommand(cmd, []string{file1, file2, file3}, true)

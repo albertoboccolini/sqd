@@ -15,15 +15,15 @@ type FileSystem interface {
 
 type OSFileSystem struct{}
 
-func (osfs *OSFileSystem) Stat(name string) (os.FileInfo, error) {
+func (osFileSystem *OSFileSystem) Stat(name string) (os.FileInfo, error) {
 	return os.Stat(name)
 }
 
-func (osfs *OSFileSystem) Open(name string) (*os.File, error) {
+func (osFileSystem *OSFileSystem) Open(name string) (*os.File, error) {
 	return os.Open(name)
 }
 
-func (osfs *OSFileSystem) WalkDir(root string, fn fs.WalkDirFunc) error {
+func (osFileSystem *OSFileSystem) WalkDir(root string, fn fs.WalkDirFunc) error {
 	return filepath.WalkDir(root, fn)
 }
 
