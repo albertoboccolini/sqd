@@ -11,7 +11,7 @@ import (
 	"github.com/albertoboccolini/sqd/models"
 )
 
-const SQD_VERSION = "0.0.5"
+const SQD_VERSION = "0.0.6"
 
 type Writer interface {
 	Printf(format string, args ...interface{})
