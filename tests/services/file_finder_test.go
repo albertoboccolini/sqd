@@ -25,7 +25,6 @@ func TestIsTextFileBinary(t *testing.T) {
 	defer os.Remove(file.Name())
 	file.Write([]byte{0x00, 0x01, 0xFF, 0xFE, 0x00, 0x00})
 	file.Close()
-	file.Close()
 
 	fileFinder := services.NewFileFinder()
 

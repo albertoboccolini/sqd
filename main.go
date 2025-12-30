@@ -40,19 +40,17 @@ func main() {
 	sql := strings.Join(flag.Args(), " ")
 
 	sqlParser := services.NewSQLParser()
-	cmd := sqlParser.Parse(sql)
+	command := sqlParser.Parse(sql)
 
 	fileFinder := services.NewFileFinder()
-
 	utils := services.NewUtils()
 
-	files := fileFinder.FindFiles(cmd.File)
+	files := fileFinder.FindFiles(command.File)
 	if len(files) == 0 {
 		fmt.Println("No files found")
 		os.Exit(1)
 	}
 
 	fileOperator := services.NewFileOperator(utils)
-
-	fileOperator.ExecuteCommand(cmd, files, *transactionFlag)
+	fileOperator.ExecuteCommand(command, files, *transactionFlag)
 }
