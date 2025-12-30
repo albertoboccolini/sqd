@@ -14,27 +14,33 @@ func TestIsPathInsideCwdRelative(t *testing.T) {
 	os.WriteFile(file, []byte("test"), 0644)
 	defer os.Remove(file)
 
-	if !services.IsPathInsideCwd("./test.txt") {
+	utils := services.NewUtils()
+
+	if !utils.IsPathInsideCwd("./test.txt") {
 		t.Error("relative path should be valid")
 	}
 
-	if !services.IsPathInsideCwd("test.txt") {
+	if !utils.IsPathInsideCwd("test.txt") {
 		t.Error("relative path without ./ should be valid")
 	}
 }
 
 func TestIsPathInsideCwdAbsolute(t *testing.T) {
-	if services.IsPathInsideCwd("/etc/passwd") {
+	utils := services.NewUtils()
+
+	if utils.IsPathInsideCwd("/etc/passwd") {
 		t.Error("absolute path outside cwd should be invalid")
 	}
 }
 
 func TestIsPathInsideCwdTraversal(t *testing.T) {
-	if services.IsPathInsideCwd("../../../etc/passwd") {
+	utils := services.NewUtils()
+
+	if utils.IsPathInsideCwd("../../../etc/passwd") {
 		t.Error("path traversal should be blocked")
 	}
 
-	if services.IsPathInsideCwd("..") {
+	if utils.IsPathInsideCwd("..") {
 		t.Error("parent directory should be blocked")
 	}
 }
@@ -45,7 +51,9 @@ func TestIsPathInsideCwdSymlink(t *testing.T) {
 	os.Symlink("/tmp", symlink)
 	defer os.Remove(symlink)
 
-	if services.IsPathInsideCwd(symlink) {
+	utils := services.NewUtils()
+
+	if utils.IsPathInsideCwd(symlink) {
 		t.Error("symlink outside cwd should be invalid")
 	}
 }
