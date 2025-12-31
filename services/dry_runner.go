@@ -9,17 +9,16 @@ import (
 )
 
 type DryRunner struct {
-	fileOps FileOperations
-	utils   *Utils
+	fileOperations FileOperations
+	utils          *Utils
 }
 
-func NewDryRunner(fileOps FileOperations, utils *Utils) *DryRunner {
-	return &DryRunner{fileOps: fileOps, utils: utils}
+func NewDryRunner(fileOperations FileOperations, utils *Utils) *DryRunner {
+	return &DryRunner{fileOperations: fileOperations, utils: utils}
 }
 
 func (dryRunner *DryRunner) Validate(command models.Command, files []string, stats *models.ExecutionStats, useTransaction bool) bool {
 	total := 0
-	hasErrors := false
 
 	for _, file := range files {
 		count, ok := dryRunner.validateAndCount(file, command, stats)
@@ -28,14 +27,11 @@ func (dryRunner *DryRunner) Validate(command models.Command, files []string, sta
 				return false
 			}
 
-			hasErrors = true
 			continue
 		}
 
 		total += count
-		if count > 0 {
-			stats.Processed++
-		}
+		stats.Processed++
 	}
 
 	if command.Action == models.UPDATE {
@@ -45,10 +41,6 @@ func (dryRunner *DryRunner) Validate(command models.Command, files []string, sta
 	}
 
 	dryRunner.utils.PrintStats(*stats)
-	if useTransaction && hasErrors {
-		return false
-	}
-
 	return true
 }
 
@@ -85,6 +77,7 @@ func (dryRunner *DryRunner) countUpdates(lines []string, command models.Command)
 			count++
 		}
 	}
+
 	return count
 }
 
@@ -102,6 +95,7 @@ func (dryRunner *DryRunner) countDeletions(lines []string, command models.Comman
 			count++
 		}
 	}
+
 	return count
 }
 
@@ -116,7 +110,7 @@ func (dryRunner *DryRunner) validateAndReadFile(file string, stats *models.Execu
 		return nil, false
 	}
 
-	data, err := dryRunner.fileOps.ReadFile(file)
+	data, err := dryRunner.fileOperations.ReadFile(file)
 	if err != nil {
 		dryRunner.fail(err.Error(), stats)
 		return nil, false

@@ -38,7 +38,7 @@ func (osFileOperations *OSFileOperations) Rename(oldpath, newpath string) error 
 type FileOperator struct {
 	fileOperations FileOperations
 	utils          *Utils
-	dryRunPreview  *DryRunner
+	dryRunner      *DryRunner
 }
 
 func NewFileOperator(utils *Utils) *FileOperator {
@@ -46,16 +46,17 @@ func NewFileOperator(utils *Utils) *FileOperator {
 	return &FileOperator{
 		fileOperations: fileOperations,
 		utils:          utils,
-		dryRunPreview:  NewDryRunner(fileOperations, utils),
+		dryRunner:      NewDryRunner(fileOperations, utils),
 	}
 }
 
 func (fileOperator *FileOperator) executeDryRun(command models.Command, files []string, useTransaction bool, stats models.ExecutionStats) {
-	isValid := fileOperator.dryRunPreview.Validate(command, files, &stats, useTransaction)
+	isValid := fileOperator.dryRunner.Validate(command, files, &stats, useTransaction)
 	status := "fail"
 	if isValid {
 		status = "pass"
 	}
+
 	fmt.Printf("Dry run: %s\n", status)
 }
 
