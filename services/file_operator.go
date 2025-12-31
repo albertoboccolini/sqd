@@ -38,16 +38,28 @@ func (osFileOperations *OSFileOperations) Rename(oldpath, newpath string) error 
 type FileOperator struct {
 	fileOperations FileOperations
 	utils          *Utils
+	dryRunPreview  *DryRunner
 }
 
 func NewFileOperator(utils *Utils) *FileOperator {
+	fileOperations := &OSFileOperations{}
 	return &FileOperator{
-		fileOperations: &OSFileOperations{},
+		fileOperations: fileOperations,
 		utils:          utils,
+		dryRunPreview:  NewDryRunner(fileOperations, utils),
 	}
 }
 
-func (fileOperator *FileOperator) ExecuteCommand(command models.Command, files []string, useTransaction bool) {
+func (fileOperator *FileOperator) executeDryRun(command models.Command, files []string, useTransaction bool, stats models.ExecutionStats) {
+	isValid := fileOperator.dryRunPreview.Validate(command, files, &stats, useTransaction)
+	status := "fail"
+	if isValid {
+		status = "pass"
+	}
+	fmt.Printf("Dry run: %s\n", status)
+}
+
+func (fileOperator *FileOperator) ExecuteCommand(command models.Command, files []string, useTransaction bool, dryRun bool) {
 	stats := models.ExecutionStats{StartTime: time.Now()}
 
 	if command.Pattern == nil && ((command.Action == models.SELECT ||
@@ -97,6 +109,11 @@ func (fileOperator *FileOperator) ExecuteCommand(command models.Command, files [
 	}
 
 	if command.Action == models.UPDATE {
+		if dryRun {
+			fileOperator.executeDryRun(command, files, useTransaction, stats)
+			return
+		}
+
 		if useTransaction {
 			fileOperator.executeUpdateTransaction(command, files, &stats)
 			return
@@ -137,6 +154,11 @@ func (fileOperator *FileOperator) ExecuteCommand(command models.Command, files [
 	}
 
 	if command.Action == models.DELETE {
+		if dryRun {
+			fileOperator.executeDryRun(command, files, useTransaction, stats)
+			return
+		}
+
 		if useTransaction {
 			fileOperator.executeDeleteTransaction(command, files, &stats)
 			return

@@ -20,10 +20,10 @@ func TestTransactionPreservesFilePermissions(t *testing.T) {
 	utils := services.NewUtils()
 	sqlParser := services.NewSQLParser()
 
-	cmd := sqlParser.Parse("UPDATE test.txt SET content='NEW' WHERE content = 'content'")
+	command := sqlParser.Parse("UPDATE test.txt SET content='NEW' WHERE content = 'content'")
 
 	fileOperator := services.NewFileOperator(utils)
-	fileOperator.ExecuteCommand(cmd, []string{file}, true)
+	fileOperator.ExecuteCommand(command, []string{file}, true, false)
 
 	newInfo, _ := os.Stat(file)
 	if newInfo.Mode() != originalMode {
@@ -40,10 +40,10 @@ func TestTransactionEmptyFileHandling(t *testing.T) {
 	utils := services.NewUtils()
 	sqlParser := services.NewSQLParser()
 
-	cmd := sqlParser.Parse("UPDATE test.txt SET content='NEW' WHERE content = 'nonexistent'")
+	command := sqlParser.Parse("UPDATE test.txt SET content='NEW' WHERE content = 'nonexistent'")
 
 	fileOperator := services.NewFileOperator(utils)
-	fileOperator.ExecuteCommand(cmd, []string{file}, true)
+	fileOperator.ExecuteCommand(command, []string{file}, true, false)
 
 	result, _ := os.ReadFile(file)
 	if string(result) != "" {
@@ -61,10 +61,10 @@ func TestTransactionWithTrailingNewline(t *testing.T) {
 	utils := services.NewUtils()
 	sqlParser := services.NewSQLParser()
 
-	cmd := sqlParser.Parse("UPDATE test.txt SET content='UPDATED' WHERE content = 'line2'")
+	command := sqlParser.Parse("UPDATE test.txt SET content='UPDATED' WHERE content = 'line2'")
 
 	fileOperator := services.NewFileOperator(utils)
-	fileOperator.ExecuteCommand(cmd, []string{file}, true)
+	fileOperator.ExecuteCommand(command, []string{file}, true, false)
 
 	result, _ := os.ReadFile(file)
 	expected := "line1\nUPDATED\nline3\n"
@@ -90,10 +90,10 @@ func TestTransactionMultipleFilesSuccess(t *testing.T) {
 	utils := services.NewUtils()
 	sqlParser := services.NewSQLParser()
 
-	cmd := sqlParser.Parse("UPDATE *.txt SET content='CHANGED' WHERE content LIKE 'test'")
+	command := sqlParser.Parse("UPDATE *.txt SET content='CHANGED' WHERE content LIKE 'test'")
 
 	fileOperator := services.NewFileOperator(utils)
-	fileOperator.ExecuteCommand(cmd, []string{file1, file2, file3}, true)
+	fileOperator.ExecuteCommand(command, []string{file1, file2, file3}, true, false)
 
 	result1, _ := os.ReadFile(file1)
 	result2, _ := os.ReadFile(file2)
