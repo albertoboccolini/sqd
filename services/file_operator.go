@@ -48,7 +48,6 @@ func NewFileOperator(utils *Utils) *FileOperator {
 		utils:          utils,
 		dryRunner:      NewDryRunner(fileOperations, utils),
 	}
-	fileOperator.dryRunner.SetFileOperator(fileOperator)
 	return fileOperator
 }
 
@@ -234,59 +233,6 @@ func (fileOperator *FileOperator) selectMatches(filename string, pattern *regexp
 	}
 
 	return nil
-}
-
-func (fileOperator *FileOperator) countUpdatesInLines(lines []string, pattern *regexp.Regexp, replace string) int {
-	count := 0
-	for _, line := range lines {
-		if pattern.MatchString(line) {
-			newLine := pattern.ReplaceAllLiteralString(line, replace)
-			if newLine != line {
-				count++
-			}
-		}
-	}
-	return count
-}
-
-func (fileOperator *FileOperator) countUpdatesInLinesInBatch(lines []string, replacements []models.Replacement) int {
-	count := 0
-	for _, line := range lines {
-		original := line
-		for _, replacement := range replacements {
-			if replacement.Pattern.MatchString(line) {
-				line = replacement.Pattern.ReplaceAllLiteralString(line, replacement.Replace)
-				break
-			}
-		}
-		if line != original {
-			count++
-		}
-	}
-	return count
-}
-
-func (fileOperator *FileOperator) countDeletionsInLines(lines []string, pattern *regexp.Regexp) int {
-	count := 0
-	for _, line := range lines {
-		if pattern.MatchString(line) {
-			count++
-		}
-	}
-	return count
-}
-
-func (fileOperator *FileOperator) countDeletionsInLinesInBatch(lines []string, deletions []models.Deletion) int {
-	count := 0
-	for _, line := range lines {
-		for _, deletion := range deletions {
-			if deletion.Pattern.MatchString(line) {
-				count++
-				break
-			}
-		}
-	}
-	return count
 }
 
 func (fileOperator *FileOperator) updateFile(filename string, pattern *regexp.Regexp, replace string) (int, error) {

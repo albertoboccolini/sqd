@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/albertoboccolini/sqd/models"
@@ -16,10 +17,6 @@ type DryRunner struct {
 
 func NewDryRunner(fileOperations FileOperations, utils *Utils) *DryRunner {
 	return &DryRunner{fileOperations: fileOperations, utils: utils}
-}
-
-func (dryRunner *DryRunner) SetFileOperator(fileOperator *FileOperator) {
-	dryRunner.fileOperator = fileOperator
 }
 
 func (dryRunner *DryRunner) Validate(command models.Command, files []string, stats *models.ExecutionStats, useTransaction bool) bool {
@@ -62,18 +59,78 @@ func (dryRunner *DryRunner) validateAndCount(file string, command models.Command
 	return dryRunner.countDeletions(lines, command), true
 }
 
+func (dryRunner *DryRunner) countUpdatesInLines(lines []string, pattern *regexp.Regexp, replace string) int {
+	count := 0
+	for _, line := range lines {
+		if pattern.MatchString(line) {
+			newLine := pattern.ReplaceAllLiteralString(line, replace)
+			if newLine != line {
+				count++
+			}
+		}
+	}
+
+	return count
+}
+
+func (dryRunner *DryRunner) countUpdatesInLinesInBatch(lines []string, replacements []models.Replacement) int {
+	count := 0
+	for _, line := range lines {
+		original := line
+		for _, replacement := range replacements {
+			if replacement.Pattern.MatchString(line) {
+				line = replacement.Pattern.ReplaceAllLiteralString(line, replacement.Replace)
+				break
+			}
+		}
+
+		if line != original {
+			count++
+		}
+	}
+
+	return count
+}
+
+func (dryRunner *DryRunner) countDeletionsInLines(lines []string, pattern *regexp.Regexp) int {
+	count := 0
+	for _, line := range lines {
+		if pattern.MatchString(line) {
+			count++
+		}
+	}
+
+	return count
+}
+
+func (dryRunner *DryRunner) countDeletionsInLinesInBatch(lines []string, deletions []models.Deletion) int {
+	count := 0
+	for _, line := range lines {
+		for _, deletion := range deletions {
+			if deletion.Pattern.MatchString(line) {
+				count++
+				break
+			}
+		}
+	}
+
+	return count
+}
+
 func (dryRunner *DryRunner) countUpdates(lines []string, command models.Command) int {
 	if command.IsBatch {
-		return dryRunner.fileOperator.countUpdatesInLinesInBatch(lines, command.Replacements)
+		return dryRunner.countUpdatesInLinesInBatch(lines, command.Replacements)
 	}
-	return dryRunner.fileOperator.countUpdatesInLines(lines, command.Pattern, command.Replace)
+
+	return dryRunner.countUpdatesInLines(lines, command.Pattern, command.Replace)
 }
 
 func (dryRunner *DryRunner) countDeletions(lines []string, command models.Command) int {
 	if command.IsBatch {
-		return dryRunner.fileOperator.countDeletionsInLinesInBatch(lines, command.Deletions)
+		return dryRunner.countDeletionsInLinesInBatch(lines, command.Deletions)
 	}
-	return dryRunner.fileOperator.countDeletionsInLines(lines, command.Pattern)
+
+	return dryRunner.countDeletionsInLines(lines, command.Pattern)
 }
 
 func (dryRunner *DryRunner) validateAndReadFile(file string, stats *models.ExecutionStats) ([]string, bool) {
