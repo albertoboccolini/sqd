@@ -7,35 +7,13 @@ import (
 	"strings"
 )
 
-type FileSystem interface {
-	Stat(name string) (os.FileInfo, error)
-	Open(name string) (*os.File, error)
-	WalkDir(root string, fn fs.WalkDirFunc) error
-}
-
-type OSFileSystem struct{}
-
-func (osFileSystem *OSFileSystem) Stat(name string) (os.FileInfo, error) {
-	return os.Stat(name)
-}
-
-func (osFileSystem *OSFileSystem) Open(name string) (*os.File, error) {
-	return os.Open(name)
-}
-
-func (osFileSystem *OSFileSystem) WalkDir(root string, fn fs.WalkDirFunc) error {
-	return filepath.WalkDir(root, fn)
-}
-
 type FileFinder struct {
-	filesystem      FileSystem
 	maxTextFileSize int64
 	bufferSize      int
 }
 
 func NewFileFinder() *FileFinder {
 	return &FileFinder{
-		filesystem:      &OSFileSystem{},
 		maxTextFileSize: 100 * 1024 * 1024,
 		bufferSize:      8000,
 	}
@@ -44,7 +22,7 @@ func NewFileFinder() *FileFinder {
 // If the file cannot be stat'ed or opened, the function returns true so that
 // callers like FindFiles do not silently skip those paths.
 func (fileFinder *FileFinder) IsTextFile(path string) bool {
-	info, err := fileFinder.filesystem.Stat(path)
+	info, err := os.Stat(path)
 	if err != nil {
 		return true
 	}
@@ -53,7 +31,7 @@ func (fileFinder *FileFinder) IsTextFile(path string) bool {
 		return false
 	}
 
-	file, err := fileFinder.filesystem.Open(path)
+	file, err := os.Open(path)
 	if err != nil {
 		return true
 	}
@@ -82,7 +60,7 @@ func (fileFinder *FileFinder) FindFiles(pattern string) []string {
 
 	var files []string
 
-	fileFinder.filesystem.WalkDir(".", func(path string, entry fs.DirEntry, err error) error {
+	filepath.WalkDir(".", func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}

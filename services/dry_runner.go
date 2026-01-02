@@ -10,13 +10,12 @@ import (
 )
 
 type DryRunner struct {
-	fileOperations FileOperations
-	utils          *Utils
-	fileOperator   *FileOperator
+	utils        *Utils
+	fileOperator *FileOperator
 }
 
-func NewDryRunner(fileOperations FileOperations, utils *Utils) *DryRunner {
-	return &DryRunner{fileOperations: fileOperations, utils: utils}
+func NewDryRunner(utils *Utils) *DryRunner {
+	return &DryRunner{utils: utils}
 }
 
 func (dryRunner *DryRunner) Validate(command models.Command, files []string, stats *models.ExecutionStats, useTransaction bool) bool {
@@ -37,12 +36,12 @@ func (dryRunner *DryRunner) Validate(command models.Command, files []string, sta
 	}
 
 	if command.Action == models.UPDATE {
-		dryRunner.utils.PrintUpdateMessage(total)
+		dryRunner.utils.printUpdateMessage(total)
 	} else {
 		fmt.Printf("Deleted: %d lines\n", total)
 	}
 
-	dryRunner.utils.PrintStats(*stats)
+	dryRunner.utils.printStats(*stats)
 	return true
 }
 
@@ -139,12 +138,12 @@ func (dryRunner *DryRunner) validateAndReadFile(file string, stats *models.Execu
 		return nil, false
 	}
 
-	if !dryRunner.utils.CanWriteFile(file) {
+	if !dryRunner.utils.canWriteFile(file) {
 		dryRunner.fail("permission denied: "+file, stats)
 		return nil, false
 	}
 
-	data, err := dryRunner.fileOperations.ReadFile(file)
+	data, err := os.ReadFile(file)
 	if err != nil {
 		dryRunner.fail(err.Error(), stats)
 		return nil, false

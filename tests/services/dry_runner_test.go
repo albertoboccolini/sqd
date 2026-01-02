@@ -12,8 +12,7 @@ import (
 
 func TestValidateTransactionModeStopsOnFirstError(t *testing.T) {
 	utils := services.NewUtils()
-	fileOps := &services.OSFileOperations{}
-	dryRunner := services.NewDryRunner(fileOps, utils)
+	dryRunner := services.NewDryRunner(utils)
 
 	pattern := regexp.MustCompile("test")
 	command := models.Command{
@@ -41,8 +40,7 @@ func TestValidateNonTransactionModeContinuesAfterError(t *testing.T) {
 	defer os.Remove(validFile)
 
 	utils := services.NewUtils()
-	fileOps := &services.OSFileOperations{}
-	dryRunner := services.NewDryRunner(fileOps, utils)
+	dryRunner := services.NewDryRunner(utils)
 	pattern := regexp.MustCompile("content")
 	command := models.Command{
 		Action:  models.UPDATE,
@@ -67,8 +65,7 @@ func TestValidatePermissionDenied(t *testing.T) {
 	defer os.Remove(testFile)
 
 	utils := services.NewUtils()
-	fileOps := &services.OSFileOperations{}
-	dryRunner := services.NewDryRunner(fileOps, utils)
+	dryRunner := services.NewDryRunner(utils)
 
 	pattern := regexp.MustCompile("content")
 	command := models.Command{
