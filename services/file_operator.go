@@ -15,50 +15,17 @@ type fileBackup struct {
 	backup   string
 }
 
-type FileOperations interface {
-	ReadFile(filename string) ([]byte, error)
-	WriteFile(filename string, data []byte, perm os.FileMode) error
-	Rename(oldpath, newpath string) error
-}
-
-type OSFileOperations struct{}
-
-func (osFileOperations *OSFileOperations) ReadFile(filename string) ([]byte, error) {
-	return os.ReadFile(filename)
-}
-
-func (osFileOperations *OSFileOperations) WriteFile(filename string, data []byte, perm os.FileMode) error {
-	return os.WriteFile(filename, data, perm)
-}
-
-func (osFileOperations *OSFileOperations) Rename(oldpath, newpath string) error {
-	return os.Rename(oldpath, newpath)
-}
-
 type FileOperator struct {
-	fileOperations FileOperations
-	utils          *Utils
-	dryRunner      *DryRunner
+	utils     *Utils
+	dryRunner *DryRunner
 }
 
 func NewFileOperator(utils *Utils) *FileOperator {
-	fileOperations := &OSFileOperations{}
 	fileOperator := &FileOperator{
-		fileOperations: fileOperations,
-		utils:          utils,
-		dryRunner:      NewDryRunner(fileOperations, utils),
+		utils:     utils,
+		dryRunner: NewDryRunner(utils),
 	}
 	return fileOperator
-}
-
-func (fileOperator *FileOperator) executeDryRun(command models.Command, files []string, useTransaction bool, stats models.ExecutionStats) {
-	isValid := fileOperator.dryRunner.Validate(command, files, &stats, useTransaction)
-	status := "fail"
-	if isValid {
-		status = "pass"
-	}
-
-	fmt.Printf("Dry run: %s\n", status)
 }
 
 func (fileOperator *FileOperator) ExecuteCommand(command models.Command, files []string, useTransaction bool, dryRun bool) {
@@ -82,7 +49,7 @@ func (fileOperator *FileOperator) ExecuteCommand(command models.Command, files [
 		for _, file := range files {
 			count, err := fileOperator.countMatches(file, command.Pattern)
 			if err != nil {
-				fileOperator.utils.PrintProcessingErrorMessage(file, err)
+				fileOperator.utils.printProcessingErrorMessage(file, err)
 				stats.Skipped++
 				continue
 			}
@@ -91,7 +58,7 @@ func (fileOperator *FileOperator) ExecuteCommand(command models.Command, files [
 		}
 
 		fmt.Printf("%d lines matched\n", total)
-		fileOperator.utils.PrintStats(stats)
+		fileOperator.utils.printStats(stats)
 		return
 	}
 
@@ -99,14 +66,14 @@ func (fileOperator *FileOperator) ExecuteCommand(command models.Command, files [
 		for _, file := range files {
 			err := fileOperator.selectMatches(file, command.Pattern)
 			if err != nil {
-				fileOperator.utils.PrintProcessingErrorMessage(file, err)
+				fileOperator.utils.printProcessingErrorMessage(file, err)
 				stats.Skipped++
 				continue
 			}
 			stats.Processed++
 		}
 
-		fileOperator.utils.PrintStats(stats)
+		fileOperator.utils.printStats(stats)
 		return
 	}
 
@@ -126,7 +93,7 @@ func (fileOperator *FileOperator) ExecuteCommand(command models.Command, files [
 			for _, file := range files {
 				count, err := fileOperator.updateFileInBatch(file, command.Replacements)
 				if err != nil {
-					fileOperator.utils.PrintProcessingErrorMessage(file, err)
+					fileOperator.utils.printProcessingErrorMessage(file, err)
 					stats.Skipped++
 					continue
 				}
@@ -134,15 +101,15 @@ func (fileOperator *FileOperator) ExecuteCommand(command models.Command, files [
 				stats.Processed++
 			}
 
-			fileOperator.utils.PrintUpdateMessage(total)
-			fileOperator.utils.PrintStats(stats)
+			fileOperator.utils.printUpdateMessage(total)
+			fileOperator.utils.printStats(stats)
 			return
 		}
 
 		for _, file := range files {
 			count, err := fileOperator.updateFile(file, command.Pattern, command.Replace)
 			if err != nil {
-				fileOperator.utils.PrintProcessingErrorMessage(file, err)
+				fileOperator.utils.printProcessingErrorMessage(file, err)
 				stats.Skipped++
 				continue
 			}
@@ -150,8 +117,8 @@ func (fileOperator *FileOperator) ExecuteCommand(command models.Command, files [
 			stats.Processed++
 		}
 
-		fileOperator.utils.PrintUpdateMessage(total)
-		fileOperator.utils.PrintStats(stats)
+		fileOperator.utils.printUpdateMessage(total)
+		fileOperator.utils.printStats(stats)
 		return
 	}
 
@@ -172,7 +139,7 @@ func (fileOperator *FileOperator) ExecuteCommand(command models.Command, files [
 			for _, file := range files {
 				count, err := fileOperator.deleteMatchesInBatch(file, command.Deletions)
 				if err != nil {
-					fileOperator.utils.PrintProcessingErrorMessage(file, err)
+					fileOperator.utils.printProcessingErrorMessage(file, err)
 					stats.Skipped++
 					continue
 				}
@@ -181,14 +148,14 @@ func (fileOperator *FileOperator) ExecuteCommand(command models.Command, files [
 			}
 
 			fmt.Printf("Deleted: %d lines\n", total)
-			fileOperator.utils.PrintStats(stats)
+			fileOperator.utils.printStats(stats)
 			return
 		}
 
 		for _, file := range files {
 			count, err := fileOperator.deleteMatches(file, command.Pattern)
 			if err != nil {
-				fileOperator.utils.PrintProcessingErrorMessage(file, err)
+				fileOperator.utils.printProcessingErrorMessage(file, err)
 				stats.Skipped++
 				continue
 			}
@@ -197,12 +164,22 @@ func (fileOperator *FileOperator) ExecuteCommand(command models.Command, files [
 		}
 
 		fmt.Printf("Deleted: %d lines\n", total)
-		fileOperator.utils.PrintStats(stats)
+		fileOperator.utils.printStats(stats)
 	}
 }
 
+func (fileOperator *FileOperator) executeDryRun(command models.Command, files []string, useTransaction bool, stats models.ExecutionStats) {
+	isValid := fileOperator.dryRunner.Validate(command, files, &stats, useTransaction)
+	status := "fail"
+	if isValid {
+		status = "pass"
+	}
+
+	fmt.Printf("Dry run: %s\n", status)
+}
+
 func (fileOperator *FileOperator) countMatches(filename string, pattern *regexp.Regexp) (int, error) {
-	data, err := fileOperator.fileOperations.ReadFile(filename)
+	data, err := os.ReadFile(filename)
 	if err != nil {
 		return 0, err
 	}
@@ -220,7 +197,7 @@ func (fileOperator *FileOperator) countMatches(filename string, pattern *regexp.
 }
 
 func (fileOperator *FileOperator) selectMatches(filename string, pattern *regexp.Regexp) error {
-	data, err := fileOperator.fileOperations.ReadFile(filename)
+	data, err := os.ReadFile(filename)
 	if err != nil {
 		return err
 	}
@@ -240,11 +217,11 @@ func (fileOperator *FileOperator) updateFile(filename string, pattern *regexp.Re
 		return 0, fmt.Errorf("invalid path detected: %s", filename)
 	}
 
-	if !fileOperator.utils.CanWriteFile(filename) {
+	if !fileOperator.utils.canWriteFile(filename) {
 		return 0, fmt.Errorf("permission denied")
 	}
 
-	data, err := fileOperator.fileOperations.ReadFile(filename)
+	data, err := os.ReadFile(filename)
 	if err != nil {
 		return 0, err
 	}
@@ -260,7 +237,7 @@ func (fileOperator *FileOperator) updateFile(filename string, pattern *regexp.Re
 	}
 
 	if count > 0 {
-		err = fileOperator.fileOperations.WriteFile(filename, []byte(strings.Join(lines, "\n")), 0644)
+		err = os.WriteFile(filename, []byte(strings.Join(lines, "\n")), 0644)
 		if err != nil {
 			return 0, err
 		}
@@ -274,11 +251,11 @@ func (fileOperator *FileOperator) updateFileInBatch(filename string, replacement
 		return 0, fmt.Errorf("invalid path detected: %s", filename)
 	}
 
-	if !fileOperator.utils.CanWriteFile(filename) {
+	if !fileOperator.utils.canWriteFile(filename) {
 		return 0, fmt.Errorf("permission denied")
 	}
 
-	data, err := fileOperator.fileOperations.ReadFile(filename)
+	data, err := os.ReadFile(filename)
 	if err != nil {
 		return 0, err
 	}
@@ -297,7 +274,7 @@ func (fileOperator *FileOperator) updateFileInBatch(filename string, replacement
 	}
 
 	if count > 0 {
-		err = fileOperator.fileOperations.WriteFile(filename, []byte(strings.Join(lines, "\n")), 0644)
+		err = os.WriteFile(filename, []byte(strings.Join(lines, "\n")), 0644)
 		if err != nil {
 			return 0, err
 		}
@@ -311,11 +288,11 @@ func (fileOperator *FileOperator) deleteMatches(filename string, pattern *regexp
 		return 0, fmt.Errorf("invalid path detected: %s", filename)
 	}
 
-	if !fileOperator.utils.CanWriteFile(filename) {
+	if !fileOperator.utils.canWriteFile(filename) {
 		return 0, fmt.Errorf("permission denied")
 	}
 
-	data, err := fileOperator.fileOperations.ReadFile(filename)
+	data, err := os.ReadFile(filename)
 	if err != nil {
 		return 0, err
 	}
@@ -333,7 +310,7 @@ func (fileOperator *FileOperator) deleteMatches(filename string, pattern *regexp
 	}
 
 	if count > 0 {
-		err = fileOperator.fileOperations.WriteFile(filename, []byte(strings.Join(filtered, "\n")), 0644)
+		err = os.WriteFile(filename, []byte(strings.Join(filtered, "\n")), 0644)
 		if err != nil {
 			return 0, err
 		}
@@ -347,11 +324,11 @@ func (fileOperator *FileOperator) deleteMatchesInBatch(filename string, deletion
 		return 0, fmt.Errorf("invalid path detected: %s", filename)
 	}
 
-	if !fileOperator.utils.CanWriteFile(filename) {
+	if !fileOperator.utils.canWriteFile(filename) {
 		return 0, fmt.Errorf("permission denied")
 	}
 
-	data, err := fileOperator.fileOperations.ReadFile(filename)
+	data, err := os.ReadFile(filename)
 	if err != nil {
 		return 0, err
 	}
@@ -377,7 +354,7 @@ func (fileOperator *FileOperator) deleteMatchesInBatch(filename string, deletion
 	}
 
 	if count > 0 {
-		err = fileOperator.fileOperations.WriteFile(filename, []byte(strings.Join(filtered, "\n")), 0644)
+		err = os.WriteFile(filename, []byte(strings.Join(filtered, "\n")), 0644)
 		if err != nil {
 			return 0, err
 		}
@@ -392,7 +369,7 @@ func (fileOperator *FileOperator) checkFilesBeforeTransaction(files []string) {
 			fmt.Fprintf(os.Stderr, "Transaction failed: invalid path %s\n", file)
 			os.Exit(1)
 		}
-		if !fileOperator.utils.CanWriteFile(file) {
+		if !fileOperator.utils.canWriteFile(file) {
 			fmt.Fprintf(os.Stderr, "Transaction failed: cannot write %s\n", file)
 			os.Exit(1)
 		}
@@ -407,7 +384,7 @@ func (fileOperator *FileOperator) executeUpdateTransaction(command models.Comman
 
 	for _, file := range files {
 		backupPath := file + ".sqd_backup"
-		if err := fileOperator.fileOperations.Rename(file, backupPath); err != nil {
+		if err := os.Rename(file, backupPath); err != nil {
 			fileOperator.rollbackFiles(backups)
 			fmt.Fprintf(os.Stderr, "Transaction failed: %v\n", err)
 			return
@@ -429,7 +406,7 @@ func (fileOperator *FileOperator) executeUpdateTransaction(command models.Comman
 			return
 		}
 
-		if err := fileOperator.fileOperations.Rename(backupPath, file); err != nil {
+		if err := os.Rename(backupPath, file); err != nil {
 			fileOperator.rollbackFiles(backups)
 			fmt.Fprintf(os.Stderr, "Transaction failed: %v\n", err)
 			return
@@ -439,8 +416,8 @@ func (fileOperator *FileOperator) executeUpdateTransaction(command models.Comman
 		stats.Processed++
 	}
 
-	fileOperator.utils.PrintUpdateMessage(total)
-	fileOperator.utils.PrintStats(*stats)
+	fileOperator.utils.printUpdateMessage(total)
+	fileOperator.utils.printStats(*stats)
 }
 
 func (fileOperator *FileOperator) executeDeleteTransaction(command models.Command, files []string, stats *models.ExecutionStats) {
@@ -450,7 +427,7 @@ func (fileOperator *FileOperator) executeDeleteTransaction(command models.Comman
 
 	for _, file := range files {
 		backupPath := file + ".sqd_backup"
-		if err := fileOperator.fileOperations.Rename(file, backupPath); err != nil {
+		if err := os.Rename(file, backupPath); err != nil {
 			fileOperator.rollbackFiles(backups)
 			fmt.Fprintf(os.Stderr, "Transaction failed: %v\n", err)
 			return
@@ -472,7 +449,7 @@ func (fileOperator *FileOperator) executeDeleteTransaction(command models.Comman
 			return
 		}
 
-		if err := fileOperator.fileOperations.Rename(backupPath, file); err != nil {
+		if err := os.Rename(backupPath, file); err != nil {
 			fileOperator.rollbackFiles(backups)
 			fmt.Fprintf(os.Stderr, "Transaction failed: %v\n", err)
 			return
@@ -483,12 +460,12 @@ func (fileOperator *FileOperator) executeDeleteTransaction(command models.Comman
 	}
 
 	fmt.Printf("Deleted: %d lines\n", total)
-	fileOperator.utils.PrintStats(*stats)
+	fileOperator.utils.printStats(*stats)
 }
 
 func (fileOperator *FileOperator) rollbackFiles(backups []fileBackup) {
 	for _, backup := range backups {
-		if err := fileOperator.fileOperations.Rename(backup.backup, backup.original); err != nil {
+		if err := os.Rename(backup.backup, backup.original); err != nil {
 			fmt.Fprintf(os.Stderr, "Rollback failed for %s -> %s: %v\n", backup.backup, backup.original, err)
 		}
 	}
