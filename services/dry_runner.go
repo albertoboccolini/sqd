@@ -11,10 +11,15 @@ import (
 type DryRunner struct {
 	fileOperations FileOperations
 	utils          *Utils
+	fileOperator   *FileOperator
 }
 
 func NewDryRunner(fileOperations FileOperations, utils *Utils) *DryRunner {
 	return &DryRunner{fileOperations: fileOperations, utils: utils}
+}
+
+func (dryRunner *DryRunner) SetFileOperator(fileOperator *FileOperator) {
+	dryRunner.fileOperator = fileOperator
 }
 
 func (dryRunner *DryRunner) Validate(command models.Command, files []string, stats *models.ExecutionStats, useTransaction bool) bool {
@@ -58,45 +63,17 @@ func (dryRunner *DryRunner) validateAndCount(file string, command models.Command
 }
 
 func (dryRunner *DryRunner) countUpdates(lines []string, command models.Command) int {
-	count := 0
-	for _, line := range lines {
-		original := line
-
-		if command.IsBatch {
-			for _, replacement := range command.Replacements {
-				if replacement.Pattern.MatchString(line) {
-					line = replacement.Pattern.ReplaceAllLiteralString(line, replacement.Replace)
-					break
-				}
-			}
-		} else if command.Pattern.MatchString(line) {
-			line = command.Pattern.ReplaceAllLiteralString(line, command.Replace)
-		}
-
-		if line != original {
-			count++
-		}
+	if command.IsBatch {
+		return dryRunner.fileOperator.countUpdatesInLinesInBatch(lines, command.Replacements)
 	}
-
-	return count
+	return dryRunner.fileOperator.countUpdatesInLines(lines, command.Pattern, command.Replace)
 }
 
 func (dryRunner *DryRunner) countDeletions(lines []string, command models.Command) int {
-	count := 0
-	for _, line := range lines {
-		if command.IsBatch {
-			for _, deletion := range command.Deletions {
-				if deletion.Pattern.MatchString(line) {
-					count++
-					break
-				}
-			}
-		} else if command.Pattern.MatchString(line) {
-			count++
-		}
+	if command.IsBatch {
+		return dryRunner.fileOperator.countDeletionsInLinesInBatch(lines, command.Deletions)
 	}
-
-	return count
+	return dryRunner.fileOperator.countDeletionsInLines(lines, command.Pattern)
 }
 
 func (dryRunner *DryRunner) validateAndReadFile(file string, stats *models.ExecutionStats) ([]string, bool) {
