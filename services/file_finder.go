@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
 type FileFinder struct {
@@ -58,7 +59,12 @@ func (fileFinder *FileFinder) FindFiles(pattern string) []string {
 		return []string{pattern}
 	}
 
-	var files []string
+	var (
+		files     []string
+		mutex     sync.Mutex
+		waitGroup sync.WaitGroup
+		sem       = make(chan struct{}, 100)
+	)
 
 	filepath.WalkDir(".", func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
@@ -70,12 +76,27 @@ func (fileFinder *FileFinder) FindFiles(pattern string) []string {
 		}
 
 		matched, _ := filepath.Match(pattern, filepath.Base(path))
-		if matched && fileFinder.IsTextFile(path) {
-			files = append(files, path)
+		if !matched {
+			return nil
 		}
+
+		waitGroup.Add(1)
+		sem <- struct{}{}
+
+		go func(p string) {
+			defer waitGroup.Done()
+			defer func() { <-sem }()
+
+			if fileFinder.IsTextFile(p) {
+				mutex.Lock()
+				files = append(files, p)
+				mutex.Unlock()
+			}
+		}(path)
 
 		return nil
 	})
 
+	waitGroup.Wait()
 	return files
 }
