@@ -10,7 +10,7 @@ import (
 	"github.com/albertoboccolini/sqd/models"
 )
 
-const SQD_VERSION = "0.0.7"
+const SQD_VERSION = "0.0.8"
 
 type Utils struct{}
 
