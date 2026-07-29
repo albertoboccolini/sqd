@@ -1,0 +1,164 @@
+package tests
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/overthinkinglabs/sqd/services"
+	"github.com/overthinkinglabs/sqd/services/commands"
+	"github.com/overthinkinglabs/sqd/services/files"
+	"github.com/overthinkinglabs/sqd/tests/mock"
+)
+
+func createLineReaderTestFile(t *testing.T) string {
+	t.Helper()
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+
+	file := filepath.Join(cwd, "line_reader_test.txt")
+	if err := os.WriteFile(file, []byte("one\npattern line\nthree\n"), 0o644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	t.Cleanup(func() {
+		_ = os.Remove(file)
+	})
+
+	return file
+}
+
+func newSearcherAndCounter(t *testing.T) (*commands.Searcher, *commands.Counter) {
+	t.Helper()
+
+	utils := services.NewUtils()
+	parallelizer := files.NewParallelizer(utils)
+	sorter := commands.NewSorter()
+	searcher := commands.NewSearcher(parallelizer, sorter, utils)
+	counter := commands.NewCounter(parallelizer, searcher)
+
+	return searcher, counter
+}
+
+func TestCounterCountsMatchingContentWithoutLoadingFileIntoMemory(t *testing.T) {
+	file := createLineReaderTestFile(t)
+	_, counter := newSearcherAndCounter(t)
+
+	parser := mock.NewParser()
+	command := parser.Parse("SELECT COUNT(*) FROM line_reader_test.txt WHERE content LIKE '%pattern%'")
+
+	count, stats := counter.Count([]string{file}, command)
+	if count != 1 {
+		t.Errorf("expected count 1, got %d", count)
+	}
+	if stats.Processed != 1 {
+		t.Errorf("expected 1 processed file, got %d", stats.Processed)
+	}
+	if stats.Skipped != 0 {
+		t.Errorf("expected 0 skipped files, got %d", stats.Skipped)
+	}
+}
+
+func TestCounterCountsAllLinesWithoutLoadingFileIntoMemory(t *testing.T) {
+	file := createLineReaderTestFile(t)
+	_, counter := newSearcherAndCounter(t)
+
+	parser := mock.NewParser()
+	command := parser.Parse("SELECT COUNT(*) FROM line_reader_test.txt WHERE content LIKE '%'")
+
+	count, stats := counter.Count([]string{file}, command)
+	if count != 3 {
+		t.Errorf("expected count 3, got %d", count)
+	}
+	if stats.Processed != 1 {
+		t.Errorf("expected 1 processed file, got %d", stats.Processed)
+	}
+}
+
+func TestSearcherSelectsMatchingContentWithoutLoadingFileIntoMemory(t *testing.T) {
+	file := createLineReaderTestFile(t)
+	searcher, _ := newSearcherAndCounter(t)
+
+	parser := mock.NewParser()
+	command := parser.Parse("SELECT content FROM line_reader_test.txt WHERE content LIKE '%pattern%'")
+
+	stats := searcher.Select([]string{file}, command)
+	if stats.Processed != 1 {
+		t.Errorf("expected 1 processed file, got %d", stats.Processed)
+	}
+	if stats.Skipped != 0 {
+		t.Errorf("expected 0 skipped files, got %d", stats.Skipped)
+	}
+}
+
+func TestSearcherSkipsMissingFiles(t *testing.T) {
+	searcher, _ := newSearcherAndCounter(t)
+
+	parser := mock.NewParser()
+	command := parser.Parse("SELECT content FROM line_reader_test.txt WHERE content LIKE '%pattern%'")
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+
+	missingFile := filepath.Join(cwd, "line_reader_missing.txt")
+	stats := searcher.Select([]string{missingFile}, command)
+	if stats.Processed != 0 {
+		t.Errorf("expected 0 processed files, got %d", stats.Processed)
+	}
+	if stats.Skipped != 1 {
+		t.Errorf("expected 1 skipped file, got %d", stats.Skipped)
+	}
+}
+
+func TestSearcherSelectsAllContentWhenFilteringByName(t *testing.T) {
+	file := createLineReaderTestFile(t)
+	searcher, _ := newSearcherAndCounter(t)
+
+	parser := mock.NewParser()
+	command := parser.Parse("SELECT * FROM line_reader_test.txt WHERE name LIKE 'line_reader%'")
+
+	stats := searcher.Select([]string{file}, command)
+	if stats.Processed != 1 {
+		t.Errorf("expected 1 processed file, got %d", stats.Processed)
+	}
+	if stats.Skipped != 0 {
+		t.Errorf("expected 0 skipped files, got %d", stats.Skipped)
+	}
+}
+
+func TestCounterCountsWithAndClause(t *testing.T) {
+	file := createLineReaderTestFile(t)
+	_, counter := newSearcherAndCounter(t)
+
+	parser := mock.NewParser()
+	command := parser.Parse("SELECT COUNT(*) FROM line_reader_test.txt WHERE content LIKE '%pattern%' AND content LIKE '%line%'")
+
+	count, stats := counter.Count([]string{file}, command)
+	if count != 1 {
+		t.Errorf("expected count 1, got %d", count)
+	}
+	if stats.Processed != 1 {
+		t.Errorf("expected 1 processed file, got %d", stats.Processed)
+	}
+}
+
+func TestSearcherSelectsWithAndClause(t *testing.T) {
+	file := createLineReaderTestFile(t)
+	searcher, _ := newSearcherAndCounter(t)
+
+	parser := mock.NewParser()
+	command := parser.Parse("SELECT content FROM line_reader_test.txt WHERE content LIKE '%pattern%' AND content LIKE '%line%'")
+
+	stats := searcher.Select([]string{file}, command)
+	if stats.Processed != 1 {
+		t.Errorf("expected 1 processed file, got %d", stats.Processed)
+	}
+	if stats.Skipped != 0 {
+		t.Errorf("expected 0 skipped files, got %d", stats.Skipped)
+	}
+}

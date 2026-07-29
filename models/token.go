@@ -25,6 +25,7 @@ const (
 	BY
 	ASC
 	DESC
+	AND
 	EOF
 )
 

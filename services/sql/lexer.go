@@ -152,6 +152,7 @@ func (lexer *Lexer) lookupKeyword(ident string) models.TokenType {
 		"BY":      models.BY,
 		"ASC":     models.ASC,
 		"DESC":    models.DESC,
+		"AND":     models.AND,
 	}
 
 	if token, ok := keywords[upper]; ok {

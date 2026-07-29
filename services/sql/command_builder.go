@@ -11,6 +11,31 @@ func NewCommandBuilder() *CommandBuilder {
 	return &CommandBuilder{}
 }
 
+func (commandBuilder *CommandBuilder) populateWhere(command *models.Command, whereClause *ast.Where) {
+	if whereClause == nil {
+		return
+	}
+
+	command.WhereTarget = whereClause.Target
+
+	if whereClause.Target == models.CONTENT {
+		command.Pattern = whereClause.Pattern
+		command.NegateContent = whereClause.Negate
+		command.Substrings = whereClause.Substrings
+	}
+
+	if whereClause.Target == models.NAME {
+		command.WherePattern = whereClause.Pattern
+		command.NegateFileName = whereClause.Negate
+	}
+
+	if whereClause.And != nil {
+		command.ExtraPattern = whereClause.And.Pattern
+		command.ExtraNegate = whereClause.And.Negate
+		command.ExtraSubstrings = whereClause.And.Substrings
+	}
+}
+
 func (commandBuilder *CommandBuilder) VisitSelect(statement *ast.Select) (models.Command, error) {
 	command := models.Command{
 		Action:       models.SELECT,
@@ -24,19 +49,7 @@ func (commandBuilder *CommandBuilder) VisitSelect(statement *ast.Select) (models
 		command.Action = models.COUNT
 	}
 
-	if statement.WhereClause != nil {
-		command.WhereTarget = statement.WhereClause.Target
-
-		if statement.WhereClause.Target == models.CONTENT {
-			command.Pattern = statement.WhereClause.Pattern
-			command.NegateContent = statement.WhereClause.Negate
-		}
-
-		if statement.WhereClause.Target == models.NAME {
-			command.WherePattern = statement.WhereClause.Pattern
-			command.NegateFileName = statement.WhereClause.Negate
-		}
-	}
+	commandBuilder.populateWhere(&command, statement.WhereClause)
 
 	return command, nil
 }
@@ -51,20 +64,10 @@ func (commandBuilder *CommandBuilder) VisitUpdate(statement *ast.Update) (models
 	}
 
 	if statement.WhereClause != nil && !statement.IsBatch {
-		command.WhereTarget = statement.WhereClause.Target
+		commandBuilder.populateWhere(&command, statement.WhereClause)
 
-		if statement.WhereClause.Target == models.CONTENT {
-			command.Pattern = statement.WhereClause.Pattern
-			command.NegateContent = statement.WhereClause.Negate
-
-			if len(statement.Replacements) > 0 {
-				command.Replace = statement.Replacements[0].Replace
-			}
-		}
-
-		if statement.WhereClause.Target == models.NAME {
-			command.WherePattern = statement.WhereClause.Pattern
-			command.NegateFileName = statement.WhereClause.Negate
+		if len(statement.Replacements) > 0 {
+			command.Replace = statement.Replacements[0].Replace
 		}
 	}
 
@@ -81,17 +84,7 @@ func (commandBuilder *CommandBuilder) VisitDelete(statement *ast.Delete) (models
 	}
 
 	if statement.WhereClause != nil && !statement.IsBatch {
-		command.WhereTarget = statement.WhereClause.Target
-
-		if statement.WhereClause.Target == models.CONTENT {
-			command.Pattern = statement.WhereClause.Pattern
-			command.NegateContent = statement.WhereClause.Negate
-		}
-
-		if statement.WhereClause.Target == models.NAME {
-			command.WherePattern = statement.WhereClause.Pattern
-			command.NegateFileName = statement.WhereClause.Negate
-		}
+		commandBuilder.populateWhere(&command, statement.WhereClause)
 	}
 
 	return command, nil

@@ -2,7 +2,6 @@ package commands
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -54,27 +53,61 @@ func (searcher *Searcher) filterFilesByName(files []string, pattern *regexp.Rege
 	return filtered
 }
 
-func countMatchingLines(file string, pattern *regexp.Regexp, negate bool) (int, error) {
-	data, err := os.ReadFile(file)
-	if err != nil {
-		return 0, err
+func matchesCondition(line string, pattern *regexp.Regexp, negate bool) bool {
+	if pattern == nil {
+		return true
 	}
 
-	lines := strings.Split(string(data), "\n")
+	matches := pattern.MatchString(line)
+	if negate {
+		matches = !matches
+	}
+
+	return matches
+}
+
+func matchesContent(line string, command models.Command) bool {
+	if len(command.Substrings) == 1 {
+		if !strings.Contains(line, command.Substrings[0]) {
+			return false
+		}
+
+		if command.NegateContent {
+			return false
+		}
+	} else {
+		if !matchesCondition(line, command.Pattern, command.NegateContent) {
+			return false
+		}
+	}
+
+	if len(command.ExtraSubstrings) == 1 {
+		if !strings.Contains(line, command.ExtraSubstrings[0]) {
+			return false
+		}
+
+		if command.ExtraNegate {
+			return false
+		}
+	} else {
+		return matchesCondition(line, command.ExtraPattern, command.ExtraNegate)
+	}
+
+	return true
+}
+
+func countMatchingLines(file string, command models.Command) (int, error) {
 	count := 0
 
-	for _, line := range lines {
-		matches := pattern.MatchString(line)
-		if negate {
-			matches = !matches
-		}
-
-		if matches {
+	err := readFileLines(file, func(line string, lineNumber int) error {
+		if matchesContent(line, command) {
 			count++
 		}
-	}
 
-	return count, nil
+		return nil
+	})
+
+	return count, err
 }
 
 func (searcher *Searcher) Select(files []string, command models.Command) models.ExecutionStats {
@@ -102,20 +135,19 @@ func (searcher *Searcher) Select(files []string, command models.Command) models.
 	if command.WhereTarget == models.NAME && (command.SelectTarget == models.ASTERISK || command.SelectTarget == models.CONTENT) {
 		results := make([]searchResult, 0)
 		for _, file := range files {
-			data, err := os.ReadFile(file)
+			err := readFileLines(file, func(line string, lineNumber int) error {
+				results = append(results, searchResult{
+					filePath:    file,
+					lineNumber:  lineNumber,
+					lineContent: line,
+				})
+				return nil
+			})
 			if err != nil {
 				stats.Skipped++
 				continue
 			}
 
-			lines := strings.Split(string(data), "\n")
-			for i, line := range lines {
-				results = append(results, searchResult{
-					filePath:    file,
-					lineNumber:  i + 1,
-					lineContent: line,
-				})
-			}
 			stats.Processed++
 		}
 
@@ -135,28 +167,22 @@ func (searcher *Searcher) Select(files []string, command models.Command) models.
 	allFileResults := make([]fileResults, len(files))
 
 	searcher.parallelizer.ProcessFilesInParallelWithIndex(files, func(index int, file string) error {
-		data, err := os.ReadFile(file)
-		if err != nil {
-			return err
-		}
-
-		lines := strings.Split(string(data), "\n")
 		searchResults := fileResults{results: make([]searchResult, 0)}
 
-		for i, line := range lines {
-			matches := command.Pattern.MatchString(line)
-			if command.NegateContent {
-				matches = !matches
-			}
-
-			if matches {
+		err := readFileLines(file, func(line string, lineNumber int) error {
+			if matchesContent(line, command) {
 				searchResults.hasMatch = true
 				searchResults.results = append(searchResults.results, searchResult{
 					filePath:    file,
-					lineNumber:  i + 1,
+					lineNumber:  lineNumber,
 					lineContent: line,
 				})
 			}
+
+			return nil
+		})
+		if err != nil {
+			return err
 		}
 
 		allFileResults[index] = searchResults

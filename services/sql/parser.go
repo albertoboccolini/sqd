@@ -45,14 +45,16 @@ func (parser *Parser) peekTokenIs(tokenType models.TokenType) bool {
 	return parser.peekToken.Type == tokenType
 }
 
-func (parser *Parser) parseComparison(pattern **regexp.Regexp, negate *bool) {
+func (parser *Parser) parseComparison(pattern **regexp.Regexp, negate *bool, substrings *[]string) {
 	parser.nextToken()
 
 	if parser.currentTokenIs(models.EQUALS) {
 		parser.nextToken()
 		exactMatch := parser.currentToken.Literal
 		*pattern = regexp.MustCompile("^" + regexp.QuoteMeta(exactMatch) + "$")
+		*substrings = []string{exactMatch}
 		*negate = false
+		parser.nextToken()
 		return
 	}
 
@@ -61,6 +63,7 @@ func (parser *Parser) parseComparison(pattern **regexp.Regexp, negate *bool) {
 		exactMatch := parser.currentToken.Literal
 		*pattern = regexp.MustCompile("^" + regexp.QuoteMeta(exactMatch) + "$")
 		*negate = true
+		parser.nextToken()
 		return
 	}
 
@@ -68,7 +71,9 @@ func (parser *Parser) parseComparison(pattern **regexp.Regexp, negate *bool) {
 		parser.nextToken()
 		likePattern := parser.currentToken.Literal
 		*pattern = parser.extractor.likeToRegex(likePattern)
+		*substrings = parser.extractor.LikeSubstrings(likePattern)
 		*negate = false
+		parser.nextToken()
 	}
 }
 
@@ -82,15 +87,34 @@ func (parser *Parser) parseWhereClause() *ast.Where {
 
 	if parser.currentTokenIs(models.NAME) {
 		whereClause.Target = models.NAME
-		parser.parseComparison(&whereClause.Pattern, &whereClause.Negate)
+		parser.parseComparison(&whereClause.Pattern, &whereClause.Negate, &whereClause.Substrings)
 		return whereClause
 	}
 
 	if parser.currentTokenIs(models.CONTENT) {
-		parser.parseComparison(&whereClause.Pattern, &whereClause.Negate)
+		parser.parseComparison(&whereClause.Pattern, &whereClause.Negate, &whereClause.Substrings)
+		whereClause.And = parser.parseAndClause()
+		if whereClause.And != nil {
+			whereClause.And.Target = models.CONTENT
+		}
 	}
 
 	return whereClause
+}
+
+func (parser *Parser) parseAndClause() *ast.Where {
+	if !parser.currentTokenIs(models.AND) {
+		return nil
+	}
+
+	parser.nextToken()
+	andClause := &ast.Where{Target: models.CONTENT}
+
+	if parser.currentTokenIs(models.CONTENT) {
+		parser.parseComparison(&andClause.Pattern, &andClause.Negate, &andClause.Substrings)
+	}
+
+	return andClause
 }
 
 func (parser *Parser) parseOrderItem() models.OrderBy {

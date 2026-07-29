@@ -309,3 +309,28 @@ func TestParseOrderByWithoutDirection(t *testing.T) {
 		t.Errorf("expected second ORDER BY content, got %v", command.OrderBy[1].Column)
 	}
 }
+
+func TestParseWhereAnd(t *testing.T) {
+	parser := mock.NewParser()
+	command := parser.Parse("SELECT * FROM *.txt WHERE content LIKE '%foo%' AND content = 'exact'")
+
+	if command.Pattern == nil {
+		t.Fatal("primary pattern is nil")
+	}
+
+	if !command.Pattern.MatchString("foo") {
+		t.Error("primary pattern should match 'foo'")
+	}
+
+	if command.ExtraPattern == nil {
+		t.Fatal("extra pattern is nil")
+	}
+
+	if !command.ExtraPattern.MatchString("exact") {
+		t.Error("extra pattern should match 'exact'")
+	}
+
+	if command.ExtraPattern.MatchString("not exact") {
+		t.Error("extra pattern should not match 'not exact'")
+	}
+}

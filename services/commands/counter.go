@@ -1,8 +1,7 @@
 package commands
 
 import (
-	"os"
-	"strings"
+	"io"
 	"time"
 
 	"github.com/overthinkinglabs/sqd/models"
@@ -36,21 +35,22 @@ func (counter *Counter) Count(files []string, command models.Command) (int, mode
 		}
 
 		total := counter.parallelizer.ProcessFilesInParallel(files, func(file string) (int, error) {
-			data, err := os.ReadFile(file)
+			found := false
+
+			err := readFileLines(file, func(line string, lineNumber int) error {
+				if matchesContent(line, command) {
+					found = true
+					return io.EOF
+				}
+
+				return nil
+			})
 			if err != nil {
 				return 0, err
 			}
 
-			lines := strings.SplitSeq(string(data), "\n")
-			for line := range lines {
-				matches := command.Pattern.MatchString(line)
-				if command.NegateContent {
-					matches = !matches
-				}
-
-				if matches {
-					return 1, nil
-				}
+			if found {
+				return 1, nil
 			}
 
 			return 0, nil
@@ -61,26 +61,31 @@ func (counter *Counter) Count(files []string, command models.Command) (int, mode
 		if command.WhereTarget == models.NAME && command.WherePattern != nil {
 			total := 0
 			for _, file := range files {
-				data, err := os.ReadFile(file)
+				lineCount := 0
+
+				err := readFileLines(file, func(line string, lineNumber int) error {
+					lineCount++
+					return nil
+				})
 				if err != nil {
 					stats.Skipped++
 					continue
 				}
-				lines := strings.Split(string(data), "\n")
-				total += len(lines)
+
+				total += lineCount
 				stats.Processed++
 			}
 			return total, stats
 		}
 
 		total := counter.parallelizer.ProcessFilesInParallel(files, func(file string) (int, error) {
-			return countMatchingLines(file, command.Pattern, command.NegateContent)
+			return countMatchingLines(file, command)
 		}, &stats)
 
 		return total, stats
 	default:
 		total := counter.parallelizer.ProcessFilesInParallel(files, func(file string) (int, error) {
-			return countMatchingLines(file, command.Pattern, command.NegateContent)
+			return countMatchingLines(file, command)
 		}, &stats)
 
 		return total, stats

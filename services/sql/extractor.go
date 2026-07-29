@@ -59,3 +59,15 @@ func (extractor *Extractor) likeToRegex(pattern string) *regexp.Regexp {
 
 	return regexp.MustCompile(pattern)
 }
+
+func (extractor *Extractor) LikeSubstrings(pattern string) []string {
+	parts := strings.Split(pattern, "%")
+	substrings := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part != "" {
+			substrings = append(substrings, part)
+		}
+	}
+
+	return substrings
+}

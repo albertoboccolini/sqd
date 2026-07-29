@@ -7,7 +7,9 @@ import (
 )
 
 type Where struct {
-	Target  models.TokenType
-	Pattern *regexp.Regexp
-	Negate  bool
+	Target     models.TokenType
+	Pattern    *regexp.Regexp
+	Negate     bool
+	Substrings []string
+	And        *Where
 }
