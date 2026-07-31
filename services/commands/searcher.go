@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
-	"strings"
 	"time"
 
 	"github.com/overthinkinglabs/sqd/models"
@@ -67,33 +66,11 @@ func matchesCondition(line string, pattern *regexp.Regexp, negate bool) bool {
 }
 
 func matchesContent(line string, command models.Command) bool {
-	if len(command.Substrings) == 1 {
-		if !strings.Contains(line, command.Substrings[0]) {
-			return false
-		}
-
-		if command.NegateContent {
-			return false
-		}
-	} else {
-		if !matchesCondition(line, command.Pattern, command.NegateContent) {
-			return false
-		}
+	if !matchesCondition(line, command.Pattern, command.NegateContent) {
+		return false
 	}
 
-	if len(command.ExtraSubstrings) == 1 {
-		if !strings.Contains(line, command.ExtraSubstrings[0]) {
-			return false
-		}
-
-		if command.ExtraNegate {
-			return false
-		}
-	} else {
-		return matchesCondition(line, command.ExtraPattern, command.ExtraNegate)
-	}
-
-	return true
+	return matchesCondition(line, command.ExtraPattern, command.ExtraNegate)
 }
 
 func countMatchingLines(file string, command models.Command) (int, error) {

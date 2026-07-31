@@ -20,11 +20,14 @@ func (extractor *Extractor) extractFilename(sql string, startKeyword, endKeyword
 	startIdx += len(startKeyword)
 
 	endIdx := strings.Index(upperSql[startIdx:], endKeyword)
+	var filename string
 	if endIdx == -1 {
-		return strings.TrimSpace(sql[startIdx:])
+		filename = strings.TrimSpace(sql[startIdx:])
+	} else {
+		filename = strings.TrimSpace(sql[startIdx : startIdx+endIdx])
 	}
 
-	return strings.TrimSpace(sql[startIdx : startIdx+endIdx])
+	return strings.Trim(filename, "'\"")
 }
 
 func (extractor *Extractor) likeToRegex(pattern string) *regexp.Regexp {

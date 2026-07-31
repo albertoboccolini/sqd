@@ -162,3 +162,81 @@ func TestSearcherSelectsWithAndClause(t *testing.T) {
 		t.Errorf("expected 0 skipped files, got %d", stats.Skipped)
 	}
 }
+
+func createSemanticTestFile(t *testing.T) string {
+	t.Helper()
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+
+	file := filepath.Join(cwd, "semantic_test.txt")
+	if err := os.WriteFile(file, []byte("pat\npattern line\none\nthree\nmodern\n"), 0o644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	t.Cleanup(func() {
+		_ = os.Remove(file)
+	})
+
+	return file
+}
+
+func TestCounterCountsExactContentMatch(t *testing.T) {
+	file := createSemanticTestFile(t)
+	_, counter := newSearcherAndCounter(t)
+
+	parser := mock.NewParser()
+
+	command := parser.Parse("SELECT COUNT(*) FROM semantic_test.txt WHERE content = 'pattern line'")
+	count, _ := counter.Count([]string{file}, command)
+	if count != 1 {
+		t.Errorf("expected count 1 for exact match, got %d", count)
+	}
+
+	command = parser.Parse("SELECT COUNT(*) FROM semantic_test.txt WHERE content = 'pattern'")
+	count, _ = counter.Count([]string{file}, command)
+	if count != 0 {
+		t.Errorf("expected count 0 for exact match with no matching line, got %d", count)
+	}
+}
+
+func TestCounterCountsPrefixLikeMatch(t *testing.T) {
+	file := createSemanticTestFile(t)
+	_, counter := newSearcherAndCounter(t)
+
+	parser := mock.NewParser()
+	command := parser.Parse("SELECT COUNT(*) FROM semantic_test.txt WHERE content LIKE 'patt%'")
+
+	count, _ := counter.Count([]string{file}, command)
+	if count != 1 {
+		t.Errorf("expected count 1 for prefix LIKE, got %d", count)
+	}
+}
+
+func TestCounterCountsSuffixLikeMatch(t *testing.T) {
+	file := createSemanticTestFile(t)
+	_, counter := newSearcherAndCounter(t)
+
+	parser := mock.NewParser()
+	command := parser.Parse("SELECT COUNT(*) FROM semantic_test.txt WHERE content LIKE '%odern'")
+
+	count, _ := counter.Count([]string{file}, command)
+	if count != 1 {
+		t.Errorf("expected count 1 for suffix LIKE, got %d", count)
+	}
+}
+
+func TestCounterCountsNegatedExactContentMatch(t *testing.T) {
+	file := createSemanticTestFile(t)
+	_, counter := newSearcherAndCounter(t)
+
+	parser := mock.NewParser()
+	command := parser.Parse("SELECT COUNT(*) FROM semantic_test.txt WHERE content != 'pat'")
+
+	count, _ := counter.Count([]string{file}, command)
+	if count != 4 {
+		t.Errorf("expected count 4 for negated exact match, got %d", count)
+	}
+}

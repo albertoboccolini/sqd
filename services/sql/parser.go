@@ -199,7 +199,9 @@ func (parser *Parser) parseSelectStatement() ast.Node {
 	for !parser.currentTokenIs(models.EOF) {
 		if parser.currentTokenIs(models.FROM) {
 			parser.nextToken()
-			statement.Source = parser.currentToken.Literal
+			if parser.currentTokenIs(models.IDENTIFIER) || parser.currentTokenIs(models.STRING) {
+				statement.Source = parser.currentToken.Literal
+			}
 		}
 
 		if whereClause := parser.parseWhereClause(); whereClause != nil {
@@ -221,7 +223,7 @@ func (parser *Parser) parseUpdateStatement(sql string) ast.Node {
 	statement := &ast.Update{}
 
 	parser.nextToken()
-	if parser.currentTokenIs(models.IDENTIFIER) {
+	if parser.currentTokenIs(models.IDENTIFIER) || parser.currentTokenIs(models.STRING) {
 		statement.Source = parser.currentToken.Literal
 	}
 
@@ -285,7 +287,9 @@ func (parser *Parser) parseDeleteStatement(sql string) ast.Node {
 	for !parser.currentTokenIs(models.EOF) {
 		if parser.currentTokenIs(models.FROM) {
 			parser.nextToken()
-			statement.Source = parser.currentToken.Literal
+			if parser.currentTokenIs(models.IDENTIFIER) || parser.currentTokenIs(models.STRING) {
+				statement.Source = parser.currentToken.Literal
+			}
 		}
 
 		if whereClause := parser.parseWhereClause(); whereClause != nil {

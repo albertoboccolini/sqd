@@ -15,6 +15,7 @@ import (
 	"github.com/overthinkinglabs/sqd/services/dry_mode"
 	"github.com/overthinkinglabs/sqd/services/files"
 	"github.com/overthinkinglabs/sqd/services/sql"
+	"github.com/overthinkinglabs/sqd/services/variables"
 )
 
 func splitQueries(data []byte, atEOF bool) (advance int, token []byte, err error) {
@@ -36,9 +37,33 @@ func handleError(errorHandler *services.ErrorHandler, err error) {
 	os.Exit(1)
 }
 
-func executeQuery(query string, useTransaction, dryRun bool, showDetailedOutputInDryMode bool) error {
+func parseVariable(value string) (string, string, error) {
+	parts := strings.SplitN(value, "=", 2)
+	if len(parts) != 2 {
+		return "", "", fmt.Errorf("variable must be in key=value format")
+	}
+
+	return parts[0], parts[1], nil
+}
+
+func registerVariableFlag(flagSet *flag.FlagSet, variables map[string]string) {
+	flagSet.Func("var", "Define a variable as key=value (can be repeated)", func(value string) error {
+		key, val, err := parseVariable(value)
+		if err != nil {
+			return err
+		}
+
+		variables[key] = val
+		return nil
+	})
+}
+
+func executeQuery(query string, definedVariables map[string]string, useTransaction, dryRun bool, showDetailedOutputInDryMode bool) error {
+	expander := variables.NewExpander()
+	expandedQuery := expander.Expand(query, definedVariables)
+
 	validator := sql.NewValidator()
-	if err := validator.Validate(query); err != nil {
+	if err := validator.Validate(expandedQuery); err != nil {
 		return err
 	}
 
@@ -46,7 +71,7 @@ func executeQuery(query string, useTransaction, dryRun bool, showDetailedOutputI
 	batchParser := sql.NewBatchParser(extractor)
 	commandBuilder := sql.NewCommandBuilder()
 	parser := sql.NewParser(extractor, batchParser, commandBuilder)
-	command, err := parser.Parse(query)
+	command, err := parser.Parse(expandedQuery)
 	if err != nil {
 		return err
 	}
@@ -114,7 +139,7 @@ func executeQuery(query string, useTransaction, dryRun bool, showDetailedOutputI
 	return finalErr
 }
 
-func executeQueriesFromFile(filePath string, useTransaction, dryRun bool, showDetailedOutputInDryMode bool) error {
+func executeQueriesFromFile(filePath string, definedVariables map[string]string, useTransaction, dryRun bool, showDetailedOutputInDryMode bool) error {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return displayable_errors.NewFileReadError(filePath, err)
@@ -134,7 +159,7 @@ func executeQueriesFromFile(filePath string, useTransaction, dryRun bool, showDe
 		}
 
 		fmt.Printf("%s\n", query)
-		if err := executeQuery(query, useTransaction, dryRun, showDetailedOutputInDryMode); err != nil {
+		if err := executeQuery(query, definedVariables, useTransaction, dryRun, showDetailedOutputInDryMode); err != nil {
 			return err
 		}
 	}
@@ -154,12 +179,16 @@ func handleDryModeCommand(args []string, errorHandler *services.ErrorHandler) {
 	dryFlagSet.BoolVar(transactionFlag, "t", false, "Enable transaction mode with rollback on failure")
 	queryFile := dryFlagSet.String("file", "", "Path to a file containing queries to execute")
 	dryFlagSet.StringVar(queryFile, "f", "", "Path to a file containing queries to execute")
+
+	definedVariables := make(map[string]string)
+	registerVariableFlag(dryFlagSet, definedVariables)
+
 	if err := dryFlagSet.Parse(args); err != nil {
 		handleError(errorHandler, err)
 	}
 
 	if *queryFile != "" {
-		if err := executeQueriesFromFile(*queryFile, *transactionFlag, true, *completeFlag); err != nil {
+		if err := executeQueriesFromFile(*queryFile, definedVariables, *transactionFlag, true, *completeFlag); err != nil {
 			handleError(errorHandler, err)
 		}
 
@@ -172,12 +201,13 @@ func handleDryModeCommand(args []string, errorHandler *services.ErrorHandler) {
 		fmt.Println("  -c, --complete    Show file names with modified lines")
 		fmt.Println("  -t, --transaction Enable transaction mode with rollback on failure")
 		fmt.Println("  -f, --file        Path to a file containing queries to execute")
+		fmt.Println("      --var         Define a variable as key=value (can be repeated)")
 		os.Exit(1)
 	}
 
 	query := strings.Join(dryFlagSet.Args(), " ")
 
-	if err := executeQuery(query, *transactionFlag, true, *completeFlag); err != nil {
+	if err := executeQuery(query, definedVariables, *transactionFlag, true, *completeFlag); err != nil {
 		handleError(errorHandler, err)
 	}
 }
@@ -195,6 +225,10 @@ func main() {
 	flag.BoolVar(transactionFlag, "t", false, "Enable transaction mode with rollback on failure")
 	queryFile := flag.String("file", "", "Path to a file containing queries to execute")
 	flag.StringVar(queryFile, "f", "", "Path to a file containing queries to execute")
+
+	definedVariables := make(map[string]string)
+	registerVariableFlag(flag.CommandLine, definedVariables)
+
 	flag.Parse()
 
 	if *versionFlag {
@@ -203,7 +237,7 @@ func main() {
 	}
 
 	if *queryFile != "" {
-		if err := executeQueriesFromFile(*queryFile, *transactionFlag, false, false); err != nil {
+		if err := executeQueriesFromFile(*queryFile, definedVariables, *transactionFlag, false, false); err != nil {
 			handleError(errorHandler, err)
 		}
 
@@ -234,6 +268,7 @@ func main() {
 		fmt.Println("  sqd dry -c 'UPDATE file.txt SET old TO new WHERE content = match'")
 		fmt.Println("  sqd -t 'DELETE FROM file.txt WHERE content = exact_match'")
 		fmt.Println("  sqd -f path/to/file")
+		fmt.Println("  sqd --var old=foo --var new=bar 'UPDATE *.md SET content=\"$new\" WHERE content = \"$old\"'")
 		fmt.Println("\nCommands:")
 		fmt.Println("  dry               Show what would be done without making changes")
 		fmt.Println("    -c, --complete  Show file names with modified lines")
@@ -241,12 +276,13 @@ func main() {
 		fmt.Println("  -f, --file        Path to a file containing queries to execute")
 		fmt.Println("  -t, --transaction Enable transaction mode with rollback on failure")
 		fmt.Println("  -v, --version     Show the version information")
+		fmt.Println("      --var         Define a variable as key=value (can be repeated)")
 		os.Exit(1)
 	}
 
 	sql := strings.Join(flag.Args(), " ")
 
-	if err := executeQuery(sql, *transactionFlag, false, false); err != nil {
+	if err := executeQuery(sql, definedVariables, *transactionFlag, false, false); err != nil {
 		handleError(errorHandler, err)
 	}
 }
