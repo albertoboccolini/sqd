@@ -48,16 +48,16 @@ func (extractor *Extractor) likeToRegex(pattern string) *regexp.Regexp {
 
 	pattern = regexp.QuoteMeta(pattern)
 
-	if !hasStart && hasEnd {
-		pattern = "^" + pattern
+	if hasStart && hasEnd {
+		return regexp.MustCompile(pattern)
 	}
 
-	if hasStart && !hasEnd {
-		pattern = pattern + "$"
+	if hasStart {
+		return regexp.MustCompile(pattern + "$")
 	}
 
-	if !hasStart && !hasEnd {
-		pattern = "^" + pattern + "$"
+	if hasEnd {
+		return regexp.MustCompile("^" + pattern)
 	}
 
 	return regexp.MustCompile(pattern)
