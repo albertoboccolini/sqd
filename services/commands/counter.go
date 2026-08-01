@@ -20,8 +20,9 @@ func NewCounter(parallelizer *files.Parallelizer, searcher *Searcher) *Counter {
 	}
 }
 
-func (counter *Counter) Count(files []string, command models.Command) (int, models.ExecutionStats) {
+func (counter *Counter) Count(files []string, command models.Command) (int, models.ExecutionStats, error) {
 	stats := models.ExecutionStats{StartTime: time.Now()}
+	errorCollection := models.NewErrorCollection()
 
 	if command.WhereTarget == models.NAME && command.WherePattern != nil {
 		files = counter.searcher.filterFilesByName(files, command.WherePattern, command.NegateFileName)
@@ -31,10 +32,10 @@ func (counter *Counter) Count(files []string, command models.Command) (int, mode
 	case models.NAME:
 		if command.WhereTarget == models.NAME && command.WherePattern != nil {
 			stats.Processed = len(files)
-			return len(files), stats
+			return len(files), stats, nil
 		}
 
-		total := counter.parallelizer.ProcessFilesInParallel(files, func(file string) (int, error) {
+		total, readErrors := counter.parallelizer.ProcessFilesInParallel(files, func(file string) (int, error) {
 			found := false
 
 			err := readFileLines(file, func(line string, lineNumber int) error {
@@ -56,7 +57,8 @@ func (counter *Counter) Count(files []string, command models.Command) (int, mode
 			return 0, nil
 		}, &stats)
 
-		return total, stats
+		mergeErrors(errorCollection, readErrors)
+		return total, stats, errorCollectionOrNil(errorCollection)
 	case models.CONTENT, models.ASTERISK:
 		if command.WhereTarget == models.NAME && command.WherePattern != nil {
 			total := 0
@@ -68,6 +70,7 @@ func (counter *Counter) Count(files []string, command models.Command) (int, mode
 					return nil
 				})
 				if err != nil {
+					errorCollection.Add(err)
 					stats.Skipped++
 					continue
 				}
@@ -75,19 +78,22 @@ func (counter *Counter) Count(files []string, command models.Command) (int, mode
 				total += lineCount
 				stats.Processed++
 			}
-			return total, stats
+
+			return total, stats, errorCollectionOrNil(errorCollection)
 		}
 
-		total := counter.parallelizer.ProcessFilesInParallel(files, func(file string) (int, error) {
+		total, readErrors := counter.parallelizer.ProcessFilesInParallel(files, func(file string) (int, error) {
 			return countMatchingLines(file, command)
 		}, &stats)
 
-		return total, stats
+		mergeErrors(errorCollection, readErrors)
+		return total, stats, errorCollectionOrNil(errorCollection)
 	default:
-		total := counter.parallelizer.ProcessFilesInParallel(files, func(file string) (int, error) {
+		total, readErrors := counter.parallelizer.ProcessFilesInParallel(files, func(file string) (int, error) {
 			return countMatchingLines(file, command)
 		}, &stats)
 
-		return total, stats
+		mergeErrors(errorCollection, readErrors)
+		return total, stats, errorCollectionOrNil(errorCollection)
 	}
 }

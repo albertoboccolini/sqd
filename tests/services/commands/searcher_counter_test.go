@@ -1,10 +1,12 @@
 package tests
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/overthinkinglabs/sqd/models"
 	"github.com/overthinkinglabs/sqd/services"
 	"github.com/overthinkinglabs/sqd/services/commands"
 	"github.com/overthinkinglabs/sqd/services/files"
@@ -50,7 +52,10 @@ func TestCounterCountsMatchingContentWithoutLoadingFileIntoMemory(t *testing.T) 
 	parser := mock.NewParser()
 	command := parser.Parse("SELECT COUNT(*) FROM line_reader_test.txt WHERE content LIKE '%pattern%'")
 
-	count, stats := counter.Count([]string{file}, command)
+	count, stats, err := counter.Count([]string{file}, command)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if count != 1 {
 		t.Errorf("expected count 1, got %d", count)
 	}
@@ -69,7 +74,10 @@ func TestCounterCountsAllLinesWithoutLoadingFileIntoMemory(t *testing.T) {
 	parser := mock.NewParser()
 	command := parser.Parse("SELECT COUNT(*) FROM line_reader_test.txt WHERE content LIKE '%'")
 
-	count, stats := counter.Count([]string{file}, command)
+	count, stats, err := counter.Count([]string{file}, command)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if count != 3 {
 		t.Errorf("expected count 3, got %d", count)
 	}
@@ -85,7 +93,10 @@ func TestSearcherSelectsMatchingContentWithoutLoadingFileIntoMemory(t *testing.T
 	parser := mock.NewParser()
 	command := parser.Parse("SELECT content FROM line_reader_test.txt WHERE content LIKE '%pattern%'")
 
-	stats := searcher.Select([]string{file}, command)
+	stats, err := searcher.Select([]string{file}, command)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if stats.Processed != 1 {
 		t.Errorf("expected 1 processed file, got %d", stats.Processed)
 	}
@@ -94,7 +105,7 @@ func TestSearcherSelectsMatchingContentWithoutLoadingFileIntoMemory(t *testing.T
 	}
 }
 
-func TestSearcherSkipsMissingFiles(t *testing.T) {
+func TestSearcherReportsMissingFiles(t *testing.T) {
 	searcher, _ := newSearcherAndCounter(t)
 
 	parser := mock.NewParser()
@@ -106,7 +117,18 @@ func TestSearcherSkipsMissingFiles(t *testing.T) {
 	}
 
 	missingFile := filepath.Join(cwd, "line_reader_missing.txt")
-	stats := searcher.Select([]string{missingFile}, command)
+	stats, err := searcher.Select([]string{missingFile}, command)
+	if err == nil {
+		t.Fatal("expected an error for missing file")
+	}
+
+	var errorCollection *models.ErrorCollection
+	if !errors.As(err, &errorCollection) {
+		t.Fatalf("expected ErrorCollection, got %T", err)
+	}
+	if len(errorCollection.Errors()) != 1 {
+		t.Errorf("expected 1 error, got %d", len(errorCollection.Errors()))
+	}
 	if stats.Processed != 0 {
 		t.Errorf("expected 0 processed files, got %d", stats.Processed)
 	}
@@ -122,7 +144,10 @@ func TestSearcherSelectsAllContentWhenFilteringByName(t *testing.T) {
 	parser := mock.NewParser()
 	command := parser.Parse("SELECT * FROM line_reader_test.txt WHERE name LIKE 'line_reader%'")
 
-	stats := searcher.Select([]string{file}, command)
+	stats, err := searcher.Select([]string{file}, command)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if stats.Processed != 1 {
 		t.Errorf("expected 1 processed file, got %d", stats.Processed)
 	}
@@ -138,7 +163,10 @@ func TestCounterCountsWithAndClause(t *testing.T) {
 	parser := mock.NewParser()
 	command := parser.Parse("SELECT COUNT(*) FROM line_reader_test.txt WHERE content LIKE '%pattern%' AND content LIKE '%line%'")
 
-	count, stats := counter.Count([]string{file}, command)
+	count, stats, err := counter.Count([]string{file}, command)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if count != 1 {
 		t.Errorf("expected count 1, got %d", count)
 	}
@@ -154,7 +182,10 @@ func TestSearcherSelectsWithAndClause(t *testing.T) {
 	parser := mock.NewParser()
 	command := parser.Parse("SELECT content FROM line_reader_test.txt WHERE content LIKE '%pattern%' AND content LIKE '%line%'")
 
-	stats := searcher.Select([]string{file}, command)
+	stats, err := searcher.Select([]string{file}, command)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if stats.Processed != 1 {
 		t.Errorf("expected 1 processed file, got %d", stats.Processed)
 	}
@@ -190,13 +221,19 @@ func TestCounterCountsExactContentMatch(t *testing.T) {
 	parser := mock.NewParser()
 
 	command := parser.Parse("SELECT COUNT(*) FROM semantic_test.txt WHERE content = 'pattern line'")
-	count, _ := counter.Count([]string{file}, command)
+	count, _, err := counter.Count([]string{file}, command)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if count != 1 {
 		t.Errorf("expected count 1 for exact match, got %d", count)
 	}
 
 	command = parser.Parse("SELECT COUNT(*) FROM semantic_test.txt WHERE content = 'pattern'")
-	count, _ = counter.Count([]string{file}, command)
+	count, _, err = counter.Count([]string{file}, command)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if count != 0 {
 		t.Errorf("expected count 0 for exact match with no matching line, got %d", count)
 	}
@@ -209,7 +246,10 @@ func TestCounterCountsPrefixLikeMatch(t *testing.T) {
 	parser := mock.NewParser()
 	command := parser.Parse("SELECT COUNT(*) FROM semantic_test.txt WHERE content LIKE 'patt%'")
 
-	count, _ := counter.Count([]string{file}, command)
+	count, _, err := counter.Count([]string{file}, command)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if count != 1 {
 		t.Errorf("expected count 1 for prefix LIKE, got %d", count)
 	}
@@ -222,7 +262,10 @@ func TestCounterCountsSuffixLikeMatch(t *testing.T) {
 	parser := mock.NewParser()
 	command := parser.Parse("SELECT COUNT(*) FROM semantic_test.txt WHERE content LIKE '%odern'")
 
-	count, _ := counter.Count([]string{file}, command)
+	count, _, err := counter.Count([]string{file}, command)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if count != 1 {
 		t.Errorf("expected count 1 for suffix LIKE, got %d", count)
 	}
@@ -235,7 +278,10 @@ func TestCounterCountsNegatedExactContentMatch(t *testing.T) {
 	parser := mock.NewParser()
 	command := parser.Parse("SELECT COUNT(*) FROM semantic_test.txt WHERE content != 'pat'")
 
-	count, _ := counter.Count([]string{file}, command)
+	count, _, err := counter.Count([]string{file}, command)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if count != 4 {
 		t.Errorf("expected count 4 for negated exact match, got %d", count)
 	}

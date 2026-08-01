@@ -17,10 +17,12 @@ func (extractor *Extractor) extractFilename(sql string, startKeyword, endKeyword
 	if startIdx == -1 {
 		return ""
 	}
+
 	startIdx += len(startKeyword)
 
 	endIdx := strings.Index(upperSql[startIdx:], endKeyword)
 	var filename string
+
 	if endIdx == -1 {
 		filename = strings.TrimSpace(sql[startIdx:])
 	} else {

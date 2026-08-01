@@ -69,16 +69,16 @@ func (dispatcher *Dispatcher) Execute(command models.Command, files []string, us
 	}
 
 	if command.Action == models.COUNT {
-		total, stats := dispatcher.counter.Count(files, command)
+		total, stats, err := dispatcher.counter.Count(files, command)
 		fmt.Printf("%d matches\n", total)
 		dispatcher.utils.PrintStats(stats)
-		return nil
+		return err
 	}
 
 	if command.Action == models.SELECT {
-		stats := dispatcher.searcher.Select(files, command)
+		stats, err := dispatcher.searcher.Select(files, command)
 		dispatcher.utils.PrintStats(stats)
-		return nil
+		return err
 	}
 
 	if command.Action == models.UPDATE {

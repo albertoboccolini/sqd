@@ -21,12 +21,13 @@ func (parallelizer *Parallelizer) ProcessFilesInParallel(
 	files []string,
 	processor func(string) (int, error),
 	stats *models.ExecutionStats,
-) int {
+) (int, *models.ErrorCollection) {
 	var (
-		totalCount   int
-		mutex        sync.Mutex
-		waitingGroup sync.WaitGroup
-		sem          = make(chan struct{}, models.MAX_CONCURRENT_GOROUTINES)
+		totalCount      int
+		mutex           sync.Mutex
+		waitingGroup    sync.WaitGroup
+		errorCollection = models.NewErrorCollection()
+		sem             = make(chan struct{}, models.MAX_CONCURRENT_GOROUTINES)
 	)
 
 	for _, file := range files {
@@ -41,6 +42,7 @@ func (parallelizer *Parallelizer) ProcessFilesInParallel(
 
 			mutex.Lock()
 			if err != nil {
+				errorCollection.Add(err)
 				stats.Skipped++
 			} else {
 				totalCount += count
@@ -52,18 +54,19 @@ func (parallelizer *Parallelizer) ProcessFilesInParallel(
 	}
 
 	waitingGroup.Wait()
-	return totalCount
+	return totalCount, errorCollection
 }
 
 func (parallelizer *Parallelizer) ProcessFilesInParallelNoCount(
 	files []string,
 	processor func(string) error,
 	stats *models.ExecutionStats,
-) {
+) *models.ErrorCollection {
 	var (
-		mutex        sync.Mutex
-		waitingGroup sync.WaitGroup
-		sem          = make(chan struct{}, models.MAX_CONCURRENT_GOROUTINES)
+		mutex           sync.Mutex
+		waitingGroup    sync.WaitGroup
+		errorCollection = models.NewErrorCollection()
+		sem             = make(chan struct{}, models.MAX_CONCURRENT_GOROUTINES)
 	)
 
 	for _, file := range files {
@@ -78,6 +81,7 @@ func (parallelizer *Parallelizer) ProcessFilesInParallelNoCount(
 
 			mutex.Lock()
 			if err != nil {
+				errorCollection.Add(err)
 				stats.Skipped++
 			} else {
 				stats.Processed++
@@ -88,17 +92,19 @@ func (parallelizer *Parallelizer) ProcessFilesInParallelNoCount(
 	}
 
 	waitingGroup.Wait()
+	return errorCollection
 }
 
 func (parallelizer *Parallelizer) ProcessFilesInParallelWithIndex(
 	files []string,
 	processor func(int, string) error,
 	stats *models.ExecutionStats,
-) {
+) *models.ErrorCollection {
 	var (
-		mutex        sync.Mutex
-		waitingGroup sync.WaitGroup
-		sem          = make(chan struct{}, models.MAX_CONCURRENT_GOROUTINES)
+		mutex           sync.Mutex
+		waitingGroup    sync.WaitGroup
+		errorCollection = models.NewErrorCollection()
+		sem             = make(chan struct{}, models.MAX_CONCURRENT_GOROUTINES)
 	)
 
 	for index, file := range files {
@@ -113,6 +119,7 @@ func (parallelizer *Parallelizer) ProcessFilesInParallelWithIndex(
 
 			mutex.Lock()
 			if err != nil {
+				errorCollection.Add(err)
 				stats.Skipped++
 			} else {
 				stats.Processed++
@@ -123,4 +130,5 @@ func (parallelizer *Parallelizer) ProcessFilesInParallelWithIndex(
 	}
 
 	waitingGroup.Wait()
+	return errorCollection
 }

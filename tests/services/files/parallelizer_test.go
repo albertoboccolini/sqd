@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,8 +29,17 @@ func TestParallelProcessingWithErrors(t *testing.T) {
 	parser := mock.NewParser()
 	command := parser.Parse("SELECT COUNT * FROM parallel_*.txt WHERE content LIKE 'content'")
 
-	if err := dispatcher.Execute(command, files, false, false, false); err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	err := dispatcher.Execute(command, files, false, false, false)
+	if err == nil {
+		t.Fatal("expected an error for missing file")
+	}
+
+	var errorCollection *models.ErrorCollection
+	if !errors.As(err, &errorCollection) {
+		t.Fatalf("expected ErrorCollection, got %T", err)
+	}
+	if len(errorCollection.Errors()) != 1 {
+		t.Errorf("expected 1 error, got %d", len(errorCollection.Errors()))
 	}
 
 	if _, err := os.Stat(file1); err != nil {

@@ -87,8 +87,9 @@ func countMatchingLines(file string, command models.Command) (int, error) {
 	return count, err
 }
 
-func (searcher *Searcher) Select(files []string, command models.Command) models.ExecutionStats {
+func (searcher *Searcher) Select(files []string, command models.Command) (models.ExecutionStats, error) {
 	stats := models.ExecutionStats{StartTime: time.Now()}
+	errorCollection := models.NewErrorCollection()
 
 	if command.WhereTarget == models.NAME && command.WherePattern != nil {
 		files = searcher.filterFilesByName(files, command.WherePattern, command.NegateFileName)
@@ -106,7 +107,7 @@ func (searcher *Searcher) Select(files []string, command models.Command) models.
 		}
 
 		stats.Processed = len(files)
-		return stats
+		return stats, nil
 	}
 
 	if command.WhereTarget == models.NAME && (command.SelectTarget == models.ASTERISK || command.SelectTarget == models.CONTENT) {
@@ -121,6 +122,7 @@ func (searcher *Searcher) Select(files []string, command models.Command) models.
 				return nil
 			})
 			if err != nil {
+				errorCollection.Add(err)
 				stats.Skipped++
 				continue
 			}
@@ -138,12 +140,12 @@ func (searcher *Searcher) Select(files []string, command models.Command) models.
 			}
 		}
 
-		return stats
+		return stats, errorCollectionOrNil(errorCollection)
 	}
 
 	allFileResults := make([]fileResults, len(files))
 
-	searcher.parallelizer.ProcessFilesInParallelWithIndex(files, func(index int, file string) error {
+	readErrors := searcher.parallelizer.ProcessFilesInParallelWithIndex(files, func(index int, file string) error {
 		searchResults := fileResults{results: make([]searchResult, 0)}
 
 		err := readFileLines(file, func(line string, lineNumber int) error {
@@ -166,6 +168,8 @@ func (searcher *Searcher) Select(files []string, command models.Command) models.
 		return nil
 	}, &stats)
 
+	mergeErrors(errorCollection, readErrors)
+
 	results := make([]searchResult, 0)
 	filesWithMatches := make([]string, 0)
 	for i, searchResults := range allFileResults {
@@ -187,7 +191,7 @@ func (searcher *Searcher) Select(files []string, command models.Command) models.
 		for _, result := range nameResults {
 			fmt.Printf("%s\n", searcher.utils.HighlightName(result.filePath, command.Pattern))
 		}
-		return stats
+		return stats, errorCollectionOrNil(errorCollection)
 	}
 
 	searcher.sorter.sortResults(results, command.OrderBy)
@@ -200,5 +204,5 @@ func (searcher *Searcher) Select(files []string, command models.Command) models.
 		}
 	}
 
-	return stats
+	return stats, errorCollectionOrNil(errorCollection)
 }
