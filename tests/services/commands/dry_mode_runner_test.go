@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/overthinkinglabs/sqd/models"
+	"github.com/overthinkinglabs/sqd/src/models"
 	"github.com/overthinkinglabs/sqd/tests/mock"
 )
 

@@ -4,7 +4,7 @@ Traditional Unix tools (grep, sed, awk) are powerful but have inconsistent synta
 
 ## Getting Started
 
-This project requires **Go >= 1.26.2**. Make sure you have a compatible version installed. If needed, download the latest version from [https://go.dev/dl/](https://go.dev/dl/)
+This project requires **Go >= 1.26.5**. Make sure you have a compatible version installed. If needed, download the latest version from [https://go.dev/dl/](https://go.dev/dl/)
 
 1. **Installation**: Install sqd on your system
 

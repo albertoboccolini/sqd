@@ -6,8 +6,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/overthinkinglabs/sqd/models/displayable_errors"
-	"github.com/overthinkinglabs/sqd/services"
+	"github.com/overthinkinglabs/sqd/src/models/displayable_errors"
+	"github.com/overthinkinglabs/sqd/src/services"
 )
 
 func TestErrorHandler_DisplayableError(t *testing.T) {
