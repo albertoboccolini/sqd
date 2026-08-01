@@ -3,7 +3,7 @@ package variables
 import (
 	"testing"
 
-	"github.com/overthinkinglabs/sqd/services/variables"
+	"github.com/overthinkinglabs/sqd/src/services/variables"
 )
 
 func TestExpanderReplacesDefinedVariables(t *testing.T) {

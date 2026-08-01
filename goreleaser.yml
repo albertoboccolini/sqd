@@ -3,7 +3,7 @@ project_name: sqd
 
 builds:
   - id: windows
-    main: ./main.go
+    main: ./src/main.go
     goos:
       - windows
     goarch:
@@ -11,7 +11,7 @@ builds:
       - arm64
     binary: sqd
   - id: unix
-    main: ./main.go
+    main: ./src/main.go
     goos:
       - linux
       - darwin

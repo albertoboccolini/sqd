@@ -1,8 +1,8 @@
 package mock
 
 import (
-	"github.com/overthinkinglabs/sqd/services"
-	"github.com/overthinkinglabs/sqd/services/dry_mode"
+	"github.com/overthinkinglabs/sqd/src/services"
+	"github.com/overthinkinglabs/sqd/src/services/dry_mode"
 )
 
 func NewDryModeRunner() *dry_mode.Runner {

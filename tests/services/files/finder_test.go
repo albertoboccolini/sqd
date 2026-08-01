@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/overthinkinglabs/sqd/models"
-	"github.com/overthinkinglabs/sqd/models/displayable_errors"
-	"github.com/overthinkinglabs/sqd/services/files"
+	"github.com/overthinkinglabs/sqd/src/models"
+	"github.com/overthinkinglabs/sqd/src/models/displayable_errors"
+	"github.com/overthinkinglabs/sqd/src/services/files"
 )
 
 func setupPermissionDeniedTest(t *testing.T) ([]string, error) {

@@ -3,8 +3,8 @@ package tests
 import (
 	"testing"
 
-	"github.com/overthinkinglabs/sqd/models"
-	"github.com/overthinkinglabs/sqd/services/sql"
+	"github.com/overthinkinglabs/sqd/src/models"
+	"github.com/overthinkinglabs/sqd/src/services/sql"
 )
 
 func TestLexerBasicTokens(t *testing.T) {

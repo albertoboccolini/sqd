@@ -1,0 +1,14 @@
+package ast
+
+import (
+	"regexp"
+
+	"github.com/overthinkinglabs/sqd/src/models"
+)
+
+type Where struct {
+	Target  models.TokenType
+	Pattern *regexp.Regexp
+	Negate  bool
+	And     *Where
+}
