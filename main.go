@@ -114,7 +114,6 @@ func executeQuery(query string, definedVariables map[string]string, useTransacti
 
 	dispatchErr := dispatcher.Execute(command, foundFiles, useTransaction, dryRun, showDetailedOutputInDryMode)
 
-	var finalErr error
 	if dispatchErr != nil {
 		var errorCollection *models.ErrorCollection
 		if errors.As(dispatchErr, &errorCollection) {
@@ -122,21 +121,17 @@ func executeQuery(query string, definedVariables map[string]string, useTransacti
 			return errorCollection
 		}
 
-		finalErr = dispatchErr
-	}
-
-	if walkWarnings != nil {
-		if finalErr != nil {
+		if walkWarnings != nil {
 			errorCollection := models.NewErrorCollection()
-			errorCollection.Add(finalErr)
+			errorCollection.Add(dispatchErr)
 			utils.AddWalkWarnings(errorCollection, walkWarnings)
 			return errorCollection
 		}
 
-		return walkWarnings
+		return dispatchErr
 	}
 
-	return finalErr
+	return walkWarnings
 }
 
 func executeQueriesFromFile(filePath string, definedVariables map[string]string, useTransaction, dryRun bool, showDetailedOutputInDryMode bool) error {
@@ -171,17 +166,23 @@ func executeQueriesFromFile(filePath string, definedVariables map[string]string,
 	return nil
 }
 
+func registerCommonFlags(flagSet *flag.FlagSet, variables map[string]string) (*bool, *string) {
+	transactionFlag := flagSet.Bool("transaction", false, "Enable transaction mode with rollback on failure")
+	flagSet.BoolVar(transactionFlag, "t", false, "Enable transaction mode with rollback on failure")
+	queryFile := flagSet.String("file", "", "Path to a file containing queries to execute")
+	flagSet.StringVar(queryFile, "f", "", "Path to a file containing queries to execute")
+	registerVariableFlag(flagSet, variables)
+
+	return transactionFlag, queryFile
+}
+
 func handleDryModeCommand(args []string, errorHandler *services.ErrorHandler) {
 	dryFlagSet := flag.NewFlagSet("dry", flag.ExitOnError)
 	completeFlag := dryFlagSet.Bool("complete", false, "Show file names with modified lines")
 	dryFlagSet.BoolVar(completeFlag, "c", false, "Show file names with modified lines")
-	transactionFlag := dryFlagSet.Bool("transaction", false, "Enable transaction mode with rollback on failure")
-	dryFlagSet.BoolVar(transactionFlag, "t", false, "Enable transaction mode with rollback on failure")
-	queryFile := dryFlagSet.String("file", "", "Path to a file containing queries to execute")
-	dryFlagSet.StringVar(queryFile, "f", "", "Path to a file containing queries to execute")
 
 	definedVariables := make(map[string]string)
-	registerVariableFlag(dryFlagSet, definedVariables)
+	transactionFlag, queryFile := registerCommonFlags(dryFlagSet, definedVariables)
 
 	if err := dryFlagSet.Parse(args); err != nil {
 		handleError(errorHandler, err)
@@ -221,13 +222,9 @@ func main() {
 
 	versionFlag := flag.Bool("version", false, "Print version information")
 	flag.BoolVar(versionFlag, "v", false, "Print version information")
-	transactionFlag := flag.Bool("transaction", false, "Enable transaction mode with rollback on failure")
-	flag.BoolVar(transactionFlag, "t", false, "Enable transaction mode with rollback on failure")
-	queryFile := flag.String("file", "", "Path to a file containing queries to execute")
-	flag.StringVar(queryFile, "f", "", "Path to a file containing queries to execute")
 
 	definedVariables := make(map[string]string)
-	registerVariableFlag(flag.CommandLine, definedVariables)
+	transactionFlag, queryFile := registerCommonFlags(flag.CommandLine, definedVariables)
 
 	flag.Parse()
 

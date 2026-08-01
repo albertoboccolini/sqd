@@ -4,30 +4,22 @@ import (
 	"regexp"
 )
 
-type WhereCondition struct {
-	Pattern    *regexp.Regexp
-	Negate     bool
-	Substrings []string
-}
-
 type Command struct {
-	Action          TokenType
-	File            string
-	Pattern         *regexp.Regexp
-	NegateContent   bool
-	Replace         string
-	Replacements    []Replacement
-	Deletions       []Deletion
-	IsBatch         bool
-	SelectTarget    TokenType
-	WhereTarget     TokenType
-	WherePattern    *regexp.Regexp
-	NegateFileName  bool
-	ExtraPattern    *regexp.Regexp
-	ExtraNegate     bool
-	Substrings      []string
-	ExtraSubstrings []string
-	OrderBy         []OrderBy
+	Action         TokenType
+	File           string
+	Pattern        *regexp.Regexp
+	NegateContent  bool
+	Replace        string
+	Replacements   []Replacement
+	Deletions      []Deletion
+	IsBatch        bool
+	SelectTarget   TokenType
+	WhereTarget    TokenType
+	WherePattern   *regexp.Regexp
+	NegateFileName bool
+	ExtraPattern   *regexp.Regexp
+	ExtraNegate    bool
+	OrderBy        []OrderBy
 }
 
 type OrderBy struct {

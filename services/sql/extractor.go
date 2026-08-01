@@ -50,29 +50,14 @@ func (extractor *Extractor) likeToRegex(pattern string) *regexp.Regexp {
 
 	pattern = regexp.QuoteMeta(pattern)
 
-	if hasStart && hasEnd {
+	switch {
+	case hasStart && hasEnd:
+		return regexp.MustCompile(pattern)
+	case hasStart:
+		return regexp.MustCompile(pattern + "$")
+	case hasEnd:
+		return regexp.MustCompile("^" + pattern)
+	default:
 		return regexp.MustCompile(pattern)
 	}
-
-	if hasStart {
-		return regexp.MustCompile(pattern + "$")
-	}
-
-	if hasEnd {
-		return regexp.MustCompile("^" + pattern)
-	}
-
-	return regexp.MustCompile(pattern)
-}
-
-func (extractor *Extractor) LikeSubstrings(pattern string) []string {
-	parts := strings.Split(pattern, "%")
-	substrings := make([]string, 0, len(parts))
-	for _, part := range parts {
-		if part != "" {
-			substrings = append(substrings, part)
-		}
-	}
-
-	return substrings
 }

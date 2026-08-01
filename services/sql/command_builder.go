@@ -21,7 +21,6 @@ func (commandBuilder *CommandBuilder) populateWhere(command *models.Command, whe
 	if whereClause.Target == models.CONTENT {
 		command.Pattern = whereClause.Pattern
 		command.NegateContent = whereClause.Negate
-		command.Substrings = whereClause.Substrings
 	}
 
 	if whereClause.Target == models.NAME {
@@ -32,7 +31,6 @@ func (commandBuilder *CommandBuilder) populateWhere(command *models.Command, whe
 	if whereClause.And != nil {
 		command.ExtraPattern = whereClause.And.Pattern
 		command.ExtraNegate = whereClause.And.Negate
-		command.ExtraSubstrings = whereClause.And.Substrings
 	}
 }
 
