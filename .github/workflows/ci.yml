@@ -16,7 +16,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: '1.25'
+          go-version-file: 'go.mod'
           cache: true
 
       - name: Verify dependencies
@@ -33,7 +33,7 @@ jobs:
         run: go test -v -race ./...
 
       - name: Build binary
-        run: go build -o build/app .
+        run: go build -o build/app ./src
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
