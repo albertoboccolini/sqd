@@ -20,6 +20,8 @@ type Command struct {
 	ExtraPattern   *regexp.Regexp
 	ExtraNegate    bool
 	OrderBy        []OrderBy
+	Limit          int
+	OutputFormat   OutputFormat
 }
 
 type OrderBy struct {

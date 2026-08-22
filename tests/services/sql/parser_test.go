@@ -334,3 +334,42 @@ func TestParseWhereAnd(t *testing.T) {
 		t.Error("extra pattern should not match 'not exact'")
 	}
 }
+
+func TestParseSelectLine(t *testing.T) {
+	parser := mock.NewParser()
+	command := parser.Parse("SELECT line FROM file.txt WHERE content = 'exact'")
+
+	if command.SelectTarget != models.LINE {
+		t.Fatalf("expected SelectTarget LINE, got %v", command.SelectTarget)
+	}
+}
+
+func TestParseLimit(t *testing.T) {
+	parser := mock.NewParser()
+	command := parser.Parse("SELECT * FROM *.txt WHERE content LIKE '%test%' LIMIT 5")
+
+	if command.Limit != 5 {
+		t.Fatalf("expected Limit 5, got %d", command.Limit)
+	}
+}
+
+func TestParseOrderByWithLimit(t *testing.T) {
+	parser := mock.NewParser()
+	command := parser.Parse("SELECT * FROM *.txt WHERE content LIKE '%test%' ORDER BY name DESC LIMIT 3")
+
+	if len(command.OrderBy) != 1 {
+		t.Fatalf("expected 1 order by clause, got %d", len(command.OrderBy))
+	}
+
+	if command.OrderBy[0].Column != models.NAME {
+		t.Errorf("expected ORDER BY name, got %v", command.OrderBy[0].Column)
+	}
+
+	if command.OrderBy[0].Direction != models.DESC {
+		t.Errorf("expected DESC direction, got %v", command.OrderBy[0].Direction)
+	}
+
+	if command.Limit != 3 {
+		t.Fatalf("expected Limit 3, got %d", command.Limit)
+	}
+}

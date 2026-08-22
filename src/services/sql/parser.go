@@ -3,6 +3,7 @@ package sql
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/overthinkinglabs/sqd/src/models"
@@ -155,6 +156,21 @@ func (parser *Parser) parseOrderBy() []models.OrderBy {
 	return orderBy
 }
 
+func (parser *Parser) parseLimit() int {
+	if !parser.currentTokenIs(models.LIMIT) {
+		return 0
+	}
+
+	parser.nextToken()
+	limit, err := strconv.Atoi(parser.currentToken.Literal)
+	if err != nil {
+		return 0
+	}
+
+	parser.nextToken()
+	return limit
+}
+
 func (parser *Parser) parseSelectStatement() ast.Node {
 	statement := &ast.Select{Target: models.ASTERISK}
 
@@ -177,6 +193,11 @@ func (parser *Parser) parseSelectStatement() ast.Node {
 		parser.nextToken()
 	}
 
+	if parser.peekTokenIs(models.LINE) {
+		statement.Target = models.LINE
+		parser.nextToken()
+	}
+
 	if parser.peekTokenIs(models.ASTERISK) {
 		parser.nextToken()
 	}
@@ -196,6 +217,8 @@ func (parser *Parser) parseSelectStatement() ast.Node {
 		if orderBy := parser.parseOrderBy(); orderBy != nil {
 			statement.OrderBy = orderBy
 		}
+
+		statement.Limit = parser.parseLimit()
 
 		parser.nextToken()
 	}

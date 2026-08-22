@@ -44,7 +44,19 @@ func NewDispatcher(
 	}
 }
 
-func (dispatcher *Dispatcher) Execute(command models.Command, files []string, useTransaction bool, dryRun bool, showDetailedOutputInDryMode bool) error {
+func (dispatcher *Dispatcher) printCount(total int, outputFormat models.OutputFormat) {
+	switch outputFormat {
+	case models.JSONOutput:
+		fmt.Printf("{\"matches\":%d}\n", total)
+	case models.CSVOutput:
+		fmt.Println("matches")
+		fmt.Printf("%d\n", total)
+	default:
+		fmt.Printf("%d matches\n", total)
+	}
+}
+
+func (dispatcher *Dispatcher) Execute(command models.Command, files []string, useTransaction bool, dryRun bool, showDetailedOutputInDryMode bool, outputFormat models.OutputFormat) error {
 	stats := models.ExecutionStats{StartTime: time.Now()}
 
 	if (command.Action == models.UPDATE || command.Action == models.DELETE) &&
@@ -70,13 +82,13 @@ func (dispatcher *Dispatcher) Execute(command models.Command, files []string, us
 
 	if command.Action == models.COUNT {
 		total, stats, err := dispatcher.counter.Count(files, command)
-		fmt.Printf("%d matches\n", total)
+		dispatcher.printCount(total, outputFormat)
 		dispatcher.utils.PrintStats(stats)
 		return err
 	}
 
 	if command.Action == models.SELECT {
-		stats, err := dispatcher.searcher.Select(files, command)
+		stats, err := dispatcher.searcher.Select(files, command, outputFormat)
 		dispatcher.utils.PrintStats(stats)
 		return err
 	}

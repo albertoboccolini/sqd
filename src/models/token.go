@@ -26,6 +26,8 @@ const (
 	ASC
 	DESC
 	AND
+	LIMIT
+	LINE
 	EOF
 )
 

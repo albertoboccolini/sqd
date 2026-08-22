@@ -108,3 +108,30 @@ func TestLexerDeleteStatement(t *testing.T) {
 		}
 	}
 }
+
+func TestLexerLimitAndLineKeywords(t *testing.T) {
+	input := "SELECT line FROM file.txt WHERE content LIKE '%x%' LIMIT 10"
+
+	lexer := sql.NewLexer(input)
+
+	expectedTokens := []models.TokenType{
+		models.SELECT,
+		models.LINE,
+		models.FROM,
+		models.IDENTIFIER,
+		models.WHERE,
+		models.CONTENT,
+		models.LIKE,
+		models.STRING,
+		models.LIMIT,
+		models.IDENTIFIER,
+		models.EOF,
+	}
+
+	for i, expected := range expectedTokens {
+		token := lexer.NextToken()
+		if token.Type != expected {
+			t.Errorf("token[%d] wrong. expected=%d, got=%d (literal=%q)", i, expected, token.Type, token.Literal)
+		}
+	}
+}

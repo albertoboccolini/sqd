@@ -2,8 +2,10 @@ package tests
 
 import (
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/overthinkinglabs/sqd/src/models"
@@ -43,6 +45,26 @@ func newSearcherAndCounter(t *testing.T) (*commands.Searcher, *commands.Counter)
 	counter := commands.NewCounter(parallelizer, searcher)
 
 	return searcher, counter
+}
+
+func captureOutput(t *testing.T, fn func()) string {
+	t.Helper()
+
+	oldStdout := os.Stdout
+	readPipe, writePipe, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("failed to create pipe: %v", err)
+	}
+
+	os.Stdout = writePipe
+	fn()
+	_ = writePipe.Close()
+	os.Stdout = oldStdout
+
+	data, _ := io.ReadAll(readPipe)
+	_ = readPipe.Close()
+
+	return string(data)
 }
 
 func TestCounterCountsMatchingContentWithoutLoadingFileIntoMemory(t *testing.T) {
@@ -93,7 +115,7 @@ func TestSearcherSelectsMatchingContentWithoutLoadingFileIntoMemory(t *testing.T
 	parser := mock.NewParser()
 	command := parser.Parse("SELECT content FROM line_reader_test.txt WHERE content LIKE '%pattern%'")
 
-	stats, err := searcher.Select([]string{file}, command)
+	stats, err := searcher.Select([]string{file}, command, models.TextOutput)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -117,7 +139,7 @@ func TestSearcherReportsMissingFiles(t *testing.T) {
 	}
 
 	missingFile := filepath.Join(cwd, "line_reader_missing.txt")
-	stats, err := searcher.Select([]string{missingFile}, command)
+	stats, err := searcher.Select([]string{missingFile}, command, models.TextOutput)
 	if err == nil {
 		t.Fatal("expected an error for missing file")
 	}
@@ -144,7 +166,7 @@ func TestSearcherSelectsAllContentWhenFilteringByName(t *testing.T) {
 	parser := mock.NewParser()
 	command := parser.Parse("SELECT * FROM line_reader_test.txt WHERE name LIKE 'line_reader%'")
 
-	stats, err := searcher.Select([]string{file}, command)
+	stats, err := searcher.Select([]string{file}, command, models.TextOutput)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -182,7 +204,7 @@ func TestSearcherSelectsWithAndClause(t *testing.T) {
 	parser := mock.NewParser()
 	command := parser.Parse("SELECT content FROM line_reader_test.txt WHERE content LIKE '%pattern%' AND content LIKE '%line%'")
 
-	stats, err := searcher.Select([]string{file}, command)
+	stats, err := searcher.Select([]string{file}, command, models.TextOutput)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -284,5 +306,79 @@ func TestCounterCountsNegatedExactContentMatch(t *testing.T) {
 	}
 	if count != 4 {
 		t.Errorf("expected count 4 for negated exact match, got %d", count)
+	}
+}
+
+func TestSearcherAppliesLimit(t *testing.T) {
+	file := createSemanticTestFile(t)
+	searcher, _ := newSearcherAndCounter(t)
+
+	parser := mock.NewParser()
+	command := parser.Parse("SELECT content FROM semantic_test.txt WHERE content LIKE '%a%' ORDER BY content LIMIT 2")
+
+	output := captureOutput(t, func() {
+		_, _ = searcher.Select([]string{file}, command, models.TextOutput)
+	})
+
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(lines))
+	}
+}
+
+func TestSearcherSelectLine(t *testing.T) {
+	file := createSemanticTestFile(t)
+	searcher, _ := newSearcherAndCounter(t)
+
+	parser := mock.NewParser()
+	command := parser.Parse("SELECT line FROM semantic_test.txt WHERE content = 'pattern line'")
+
+	output := captureOutput(t, func() {
+		_, _ = searcher.Select([]string{file}, command, models.TextOutput)
+	})
+
+	if strings.TrimSpace(output) != "2" {
+		t.Errorf("expected line number '2', got %q", output)
+	}
+}
+
+func TestSearcherOutputsJSON(t *testing.T) {
+	file := createSemanticTestFile(t)
+	searcher, _ := newSearcherAndCounter(t)
+
+	parser := mock.NewParser()
+	command := parser.Parse("SELECT * FROM semantic_test.txt WHERE content = 'pattern line'")
+
+	output := captureOutput(t, func() {
+		_, _ = searcher.Select([]string{file}, command, models.JSONOutput)
+	})
+
+	if !strings.Contains(output, `"name":`) {
+		t.Errorf("expected JSON to contain name field, got %q", output)
+	}
+
+	if !strings.Contains(output, `"line":2`) {
+		t.Errorf("expected JSON to contain line number 2, got %q", output)
+	}
+
+	if !strings.Contains(output, `"content":"pattern line"`) {
+		t.Errorf("expected JSON to contain content, got %q", output)
+	}
+}
+
+func TestSearcherOutputsCSV(t *testing.T) {
+	file := createSemanticTestFile(t)
+	searcher, _ := newSearcherAndCounter(t)
+
+	parser := mock.NewParser()
+	command := parser.Parse("SELECT line FROM semantic_test.txt WHERE content = 'pattern line'")
+
+	output := captureOutput(t, func() {
+		_, _ = searcher.Select([]string{file}, command, models.CSVOutput)
+	})
+
+	expected := "line\n2\n"
+	if output != expected {
+		t.Errorf("expected CSV %q, got %q", expected, output)
 	}
 }

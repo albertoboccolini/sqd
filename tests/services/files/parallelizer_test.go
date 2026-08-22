@@ -29,7 +29,7 @@ func TestParallelProcessingWithErrors(t *testing.T) {
 	parser := mock.NewParser()
 	command := parser.Parse("SELECT COUNT * FROM parallel_*.txt WHERE content LIKE 'content'")
 
-	err := dispatcher.Execute(command, files, false, false, false)
+	err := dispatcher.Execute(command, files, false, false, false, models.TextOutput)
 	if err == nil {
 		t.Fatal("expected an error for missing file")
 	}
@@ -72,7 +72,7 @@ func TestParallelProcessingConcurrencyLimit(t *testing.T) {
 	parser := mock.NewParser()
 	command := parser.Parse("SELECT COUNT * FROM concurrent_test_*.txt WHERE content LIKE 'test'")
 
-	if err := dispatcher.Execute(command, files, false, false, false); err != nil {
+	if err := dispatcher.Execute(command, files, false, false, false, models.TextOutput); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -103,7 +103,7 @@ func TestParallelProcessingMaintainsFileIntegrity(t *testing.T) {
 	parser := mock.NewParser()
 	command := parser.Parse("SELECT COUNT * FROM integrity_test_*.txt WHERE content LIKE 'line'")
 
-	if err := dispatcher.Execute(command, files, false, false, false); err != nil {
+	if err := dispatcher.Execute(command, files, false, false, false, models.TextOutput); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 

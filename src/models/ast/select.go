@@ -8,6 +8,7 @@ type Select struct {
 	WhereClause *Where
 	OrderBy     []models.OrderBy
 	IsCount     bool
+	Limit       int
 }
 
 func (statement *Select) Accept(visitor Visitor) (models.Command, error) {

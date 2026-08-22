@@ -58,7 +58,14 @@ func registerVariableFlag(flagSet *flag.FlagSet, variables map[string]string) {
 	})
 }
 
-func executeQuery(query string, definedVariables map[string]string, useTransaction, dryRun bool, showDetailedOutputInDryMode bool) error {
+func executeQuery(
+	query string,
+	definedVariables map[string]string,
+	useTransaction,
+	dryRun bool,
+	showDetailedOutputInDryMode bool,
+	outputFormat models.OutputFormat,
+) error {
 	expander := variables.NewExpander()
 	expandedQuery := expander.Expand(query, definedVariables)
 
@@ -112,7 +119,14 @@ func executeQuery(query string, definedVariables map[string]string, useTransacti
 		parallelizer,
 	)
 
-	dispatchErr := dispatcher.Execute(command, foundFiles, useTransaction, dryRun, showDetailedOutputInDryMode)
+	dispatchErr := dispatcher.Execute(
+		command,
+		foundFiles,
+		useTransaction,
+		dryRun,
+		showDetailedOutputInDryMode,
+		outputFormat,
+	)
 
 	if dispatchErr != nil {
 		var errorCollection *models.ErrorCollection
@@ -134,7 +148,14 @@ func executeQuery(query string, definedVariables map[string]string, useTransacti
 	return walkWarnings
 }
 
-func executeQueriesFromFile(filePath string, definedVariables map[string]string, useTransaction, dryRun bool, showDetailedOutputInDryMode bool) error {
+func executeQueriesFromFile(
+	filePath string,
+	definedVariables map[string]string,
+	useTransaction,
+	dryRun bool,
+	showDetailedOutputInDryMode bool,
+	outputFormat models.OutputFormat,
+) error {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return displayable_errors.NewFileReadError(filePath, err)
@@ -154,7 +175,14 @@ func executeQueriesFromFile(filePath string, definedVariables map[string]string,
 		}
 
 		fmt.Printf("%s\n", query)
-		if err := executeQuery(query, definedVariables, useTransaction, dryRun, showDetailedOutputInDryMode); err != nil {
+		if err := executeQuery(
+			query,
+			definedVariables,
+			useTransaction,
+			dryRun,
+			showDetailedOutputInDryMode,
+			outputFormat,
+		); err != nil {
 			return err
 		}
 	}
@@ -189,7 +217,13 @@ func handleDryModeCommand(args []string, errorHandler *services.ErrorHandler) {
 	}
 
 	if *queryFile != "" {
-		if err := executeQueriesFromFile(*queryFile, definedVariables, *transactionFlag, true, *completeFlag); err != nil {
+		if err := executeQueriesFromFile(
+			*queryFile,
+			definedVariables,
+			*transactionFlag,
+			true, *completeFlag,
+			models.TextOutput,
+		); err != nil {
 			handleError(errorHandler, err)
 		}
 
@@ -208,7 +242,13 @@ func handleDryModeCommand(args []string, errorHandler *services.ErrorHandler) {
 
 	query := strings.Join(dryFlagSet.Args(), " ")
 
-	if err := executeQuery(query, definedVariables, *transactionFlag, true, *completeFlag); err != nil {
+	if err := executeQuery(query,
+		definedVariables,
+		*transactionFlag,
+		true,
+		*completeFlag,
+		models.TextOutput,
+	); err != nil {
 		handleError(errorHandler, err)
 	}
 }
@@ -226,7 +266,23 @@ func main() {
 	definedVariables := make(map[string]string)
 	transactionFlag, queryFile := registerCommonFlags(flag.CommandLine, definedVariables)
 
+	jsonFlag := flag.Bool("json", false, "Print query output as JSON")
+	csvFlag := flag.Bool("csv", false, "Print query output as CSV")
+
 	flag.Parse()
+
+	if *jsonFlag && *csvFlag {
+		handleError(errorHandler, displayable_errors.NewInvalidQueryError("Cannot use both --json and --csv"))
+	}
+
+	outputFormat := models.TextOutput
+	if *jsonFlag {
+		outputFormat = models.JSONOutput
+	}
+
+	if *csvFlag {
+		outputFormat = models.CSVOutput
+	}
 
 	if *versionFlag {
 		fmt.Printf("v%s\n", models.VERSION)
@@ -234,7 +290,14 @@ func main() {
 	}
 
 	if *queryFile != "" {
-		if err := executeQueriesFromFile(*queryFile, definedVariables, *transactionFlag, false, false); err != nil {
+		if err := executeQueriesFromFile(
+			*queryFile,
+			definedVariables,
+			*transactionFlag,
+			false,
+			false,
+			outputFormat,
+		); err != nil {
 			handleError(errorHandler, err)
 		}
 
@@ -255,12 +318,13 @@ func main() {
 		fmt.Println("  WHERE		Define matching criteria")
 		fmt.Println("  SET		Define replacement content for UPDATE statements (only for content)")
 		fmt.Println("  ORDER BY 	Sort matching lines (using name or content)")
+		fmt.Println("  LIMIT n\tReturn only the first n results")
 		fmt.Println("\nOperators:")
 		fmt.Println("  =		Exact match")
 		fmt.Println("  !=		Negation of exact match")
 		fmt.Println("  LIKE		Pattern match with wildcards (%)")
 		fmt.Println("\nExamples:")
-		fmt.Println("  sqd 'SELECT * | name | content FROM file.txt WHERE content LIKE pattern ORDER BY name | content ASC | DESC'")
+		fmt.Println("  sqd 'SELECT *|name|content FROM *.txt WHERE content LIKE pattern ORDER BY name|content ASC|DESC'")
 		fmt.Println("  sqd dry 'UPDATE file.txt SET old TO new WHERE content = match, SET foo TO bar WHERE content = other'")
 		fmt.Println("  sqd dry -c 'UPDATE file.txt SET old TO new WHERE content = match'")
 		fmt.Println("  sqd -t 'DELETE FROM file.txt WHERE content = exact_match'")
@@ -273,13 +337,15 @@ func main() {
 		fmt.Println("  -f, --file        Path to a file containing queries to execute")
 		fmt.Println("  -t, --transaction Enable transaction mode with rollback on failure")
 		fmt.Println("  -v, --version     Show the version information")
+		fmt.Println("      --json        Print SELECT/COUNT output as JSON")
+		fmt.Println("      --csv         Print SELECT/COUNT output as CSV")
 		fmt.Println("      --var         Define a variable as key=value (can be repeated)")
 		os.Exit(1)
 	}
 
 	sql := strings.Join(flag.Args(), " ")
 
-	if err := executeQuery(sql, definedVariables, *transactionFlag, false, false); err != nil {
+	if err := executeQuery(sql, definedVariables, *transactionFlag, false, false, outputFormat); err != nil {
 		handleError(errorHandler, err)
 	}
 }

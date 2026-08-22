@@ -40,6 +40,7 @@ func (commandBuilder *CommandBuilder) VisitSelect(statement *ast.Select) (models
 		SelectTarget: statement.Target,
 		File:         statement.Source,
 		OrderBy:      statement.OrderBy,
+		Limit:        statement.Limit,
 		WhereTarget:  models.CONTENT,
 	}
 
