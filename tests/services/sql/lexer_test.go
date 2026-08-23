@@ -135,3 +135,21 @@ func TestLexerLimitAndLineKeywords(t *testing.T) {
 		}
 	}
 }
+
+func TestLexerHandlesUnicodeInIdentifier(t *testing.T) {
+	lexer := sql.NewLexer("obsidian/Università/*.md")
+	tokens := []string{}
+
+	for {
+		token := lexer.NextToken()
+		tokens = append(tokens, token.Literal)
+		if token.Type == models.EOF {
+			break
+		}
+	}
+
+	expected := "obsidian/Università/*.md"
+	if tokens[0] != expected {
+		t.Errorf("expected identifier %q, got %q", expected, tokens[0])
+	}
+}

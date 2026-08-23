@@ -7,12 +7,32 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/overthinkinglabs/sqd/src/models"
 	"github.com/overthinkinglabs/sqd/src/services"
 	"github.com/overthinkinglabs/sqd/src/services/files"
 )
+
+func displayName(file string, pattern string) string {
+	if !strings.Contains(pattern, "/") {
+		return file
+	}
+
+	lastSlash := strings.LastIndex(pattern, "/")
+	baseDir := pattern[:lastSlash]
+	if baseDir == "" {
+		return file
+	}
+
+	relative, err := filepath.Rel(baseDir, file)
+	if err != nil {
+		return file
+	}
+
+	return relative
+}
 
 type Searcher struct {
 	parallelizer *files.Parallelizer
@@ -47,22 +67,48 @@ func (searcher *Searcher) limitResults(results []searchResult, limit int) []sear
 	return results[:limit]
 }
 
+func (searcher *Searcher) selectTargets(command models.Command) []models.TokenType {
+	if len(command.SelectTargets) > 0 {
+		return command.SelectTargets
+	}
+
+	return []models.TokenType{command.SelectTarget}
+}
+
+func (searcher *Searcher) effectiveTargets(targets []models.TokenType) []models.TokenType {
+	if len(targets) == 1 && targets[0] == models.ASTERISK {
+		return []models.TokenType{models.NAME, models.LINE, models.CONTENT}
+	}
+
+	return targets
+}
+
+func (searcher *Searcher) includesTarget(targets []models.TokenType, target models.TokenType) bool {
+	for _, currentTarget := range targets {
+		if currentTarget == target {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (searcher *Searcher) printJSONResults(results []searchResult, command models.Command) {
+	targets := searcher.effectiveTargets(searcher.selectTargets(command))
 	records := make([]map[string]any, 0, len(results))
 
 	for _, result := range results {
 		record := make(map[string]any)
 
-		if command.SelectTarget == models.NAME || command.SelectTarget == models.ASTERISK {
-			record["name"] = result.filePath
-		}
-
-		if command.SelectTarget == models.LINE || command.SelectTarget == models.ASTERISK {
-			record["line"] = result.lineNumber
-		}
-
-		if command.SelectTarget == models.CONTENT || command.SelectTarget == models.ASTERISK {
-			record["content"] = result.lineContent
+		for _, target := range targets {
+			switch target {
+			case models.NAME:
+				record["name"] = displayName(result.filePath, command.File)
+			case models.LINE:
+				record["line"] = result.lineNumber
+			case models.CONTENT:
+				record["content"] = result.lineContent
+			}
 		}
 
 		records = append(records, record)
@@ -73,21 +119,20 @@ func (searcher *Searcher) printJSONResults(results []searchResult, command model
 }
 
 func (searcher *Searcher) printCSVResults(results []searchResult, command models.Command) {
+	targets := searcher.effectiveTargets(searcher.selectTargets(command))
 	writer := csv.NewWriter(os.Stdout)
 	defer writer.Flush()
 
-	var header []string
-
-	if command.SelectTarget == models.NAME || command.SelectTarget == models.ASTERISK {
-		header = append(header, "name")
-	}
-
-	if command.SelectTarget == models.LINE || command.SelectTarget == models.ASTERISK {
-		header = append(header, "line")
-	}
-
-	if command.SelectTarget == models.CONTENT || command.SelectTarget == models.ASTERISK {
-		header = append(header, "content")
+	header := make([]string, 0, len(targets))
+	for _, target := range targets {
+		switch target {
+		case models.NAME:
+			header = append(header, "name")
+		case models.LINE:
+			header = append(header, "line")
+		case models.CONTENT:
+			header = append(header, "content")
+		}
 	}
 
 	_ = writer.Write(header)
@@ -95,16 +140,15 @@ func (searcher *Searcher) printCSVResults(results []searchResult, command models
 	for _, result := range results {
 		row := make([]string, 0, len(header))
 
-		if command.SelectTarget == models.NAME || command.SelectTarget == models.ASTERISK {
-			row = append(row, result.filePath)
-		}
-
-		if command.SelectTarget == models.LINE || command.SelectTarget == models.ASTERISK {
-			row = append(row, fmt.Sprintf("%d", result.lineNumber))
-		}
-
-		if command.SelectTarget == models.CONTENT || command.SelectTarget == models.ASTERISK {
-			row = append(row, result.lineContent)
+		for _, target := range targets {
+			switch target {
+			case models.NAME:
+				row = append(row, displayName(result.filePath, command.File))
+			case models.LINE:
+				row = append(row, fmt.Sprintf("%d", result.lineNumber))
+			case models.CONTENT:
+				row = append(row, result.lineContent)
+			}
 		}
 
 		_ = writer.Write(row)
@@ -181,7 +225,13 @@ func (searcher *Searcher) Select(files []string, command models.Command, outputF
 		files = searcher.filterFilesByName(files, command.WherePattern, command.NegateFileName)
 	}
 
-	if command.SelectTarget == models.NAME && command.WhereTarget == models.NAME {
+	targets := searcher.selectTargets(command)
+	includeName := searcher.includesTarget(targets, models.NAME)
+	includeLine := searcher.includesTarget(targets, models.LINE)
+	includeContent := searcher.includesTarget(targets, models.CONTENT)
+	includeAll := includeName && includeContent && includeLine
+
+	if includeName && !includeContent && !includeLine && command.WhereTarget == models.NAME {
 		results := make([]searchResult, 0, len(files))
 		for _, file := range files {
 			results = append(results, searchResult{filePath: file})
@@ -197,14 +247,14 @@ func (searcher *Searcher) Select(files []string, command models.Command, outputF
 		}
 
 		for _, result := range results {
-			fmt.Printf("%s\n", searcher.utils.HighlightName(result.filePath, command.WherePattern))
+			fmt.Printf("%s\n", searcher.utils.HighlightName(displayName(result.filePath, command.File), command.WherePattern))
 		}
 
 		stats.Processed = len(files)
 		return stats, nil
 	}
 
-	if command.WhereTarget == models.NAME && (command.SelectTarget == models.ASTERISK || command.SelectTarget == models.CONTENT || command.SelectTarget == models.LINE) {
+	if command.WhereTarget == models.NAME && (includeAll || includeContent || includeLine) {
 		results := make([]searchResult, 0)
 		for _, file := range files {
 			err := readFileLines(file, func(line string, lineNumber int) error {
@@ -232,17 +282,7 @@ func (searcher *Searcher) Select(files []string, command models.Command, outputF
 			return stats, errorCollectionOrNil(errorCollection)
 		}
 
-		for _, result := range results {
-			switch command.SelectTarget {
-			case models.CONTENT:
-				fmt.Printf("%s\n", result.lineContent)
-			case models.LINE:
-				fmt.Printf("%d\n", result.lineNumber)
-			case models.ASTERISK:
-				fmt.Printf("%s:%d: %s\n", searcher.utils.HighlightName(result.filePath, command.WherePattern), result.lineNumber, result.lineContent)
-			}
-		}
-
+		searcher.printTextResults(results, command, searcher.selectTargets(command))
 		return stats, errorCollectionOrNil(errorCollection)
 	}
 
@@ -278,13 +318,13 @@ func (searcher *Searcher) Select(files []string, command models.Command, outputF
 	for i, searchResults := range allFileResults {
 		if searchResults.hasMatch {
 			results = append(results, searchResults.results...)
-			if command.SelectTarget == models.NAME {
+			if includeName && !includeContent && !includeLine {
 				filesWithMatches = append(filesWithMatches, files[i])
 			}
 		}
 	}
 
-	if command.SelectTarget == models.NAME {
+	if includeName && !includeContent && !includeLine {
 		nameResults := make([]searchResult, 0, len(filesWithMatches))
 		for _, file := range filesWithMatches {
 			nameResults = append(nameResults, searchResult{filePath: file})
@@ -299,8 +339,9 @@ func (searcher *Searcher) Select(files []string, command models.Command, outputF
 		}
 
 		for _, result := range nameResults {
-			fmt.Printf("%s\n", searcher.utils.HighlightName(result.filePath, command.Pattern))
+			fmt.Printf("%s\n", searcher.utils.HighlightName(displayName(result.filePath, command.File), command.Pattern))
 		}
+
 		return stats, errorCollectionOrNil(errorCollection)
 	}
 
@@ -312,16 +353,45 @@ func (searcher *Searcher) Select(files []string, command models.Command, outputF
 		return stats, errorCollectionOrNil(errorCollection)
 	}
 
-	for _, result := range results {
-		switch command.SelectTarget {
-		case models.CONTENT:
-			fmt.Printf("%s\n", searcher.utils.HighlightMatch(result.lineContent, command.Pattern))
-		case models.LINE:
-			fmt.Printf("%d\n", result.lineNumber)
-		case models.ASTERISK:
-			fmt.Printf("%s:%d: %s\n", result.filePath, result.lineNumber, searcher.utils.HighlightMatch(result.lineContent, command.Pattern))
+	searcher.printTextResults(results, command, searcher.selectTargets(command))
+	return stats, errorCollectionOrNil(errorCollection)
+}
+
+func (searcher *Searcher) printTextResults(results []searchResult, command models.Command, targets []models.TokenType) {
+	if len(targets) == 1 && targets[0] == models.ASTERISK {
+		for _, result := range results {
+			content := result.lineContent
+			if command.Pattern != nil {
+				content = searcher.utils.HighlightMatch(content, command.Pattern)
+			}
+
+			fmt.Printf("%s:%d: %s\n", displayName(result.filePath, command.File), result.lineNumber, content)
 		}
+
+		return
 	}
 
-	return stats, errorCollectionOrNil(errorCollection)
+	effectiveTargets := searcher.effectiveTargets(targets)
+
+	for _, result := range results {
+		var parts []string
+
+		for _, target := range effectiveTargets {
+			switch target {
+			case models.NAME:
+				parts = append(parts, searcher.utils.HighlightName(displayName(result.filePath, command.File), command.WherePattern))
+			case models.LINE:
+				parts = append(parts, fmt.Sprintf("%d", result.lineNumber))
+			case models.CONTENT:
+				content := result.lineContent
+				if command.Pattern != nil {
+					content = searcher.utils.HighlightMatch(content, command.Pattern)
+				}
+
+				parts = append(parts, content)
+			}
+		}
+
+		fmt.Println(strings.Join(parts, "\t"))
+	}
 }

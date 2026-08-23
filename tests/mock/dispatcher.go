@@ -1,13 +1,15 @@
 package mock
 
 import (
+	"github.com/overthinkinglabs/sqd/src/models"
 	"github.com/overthinkinglabs/sqd/src/services"
 	"github.com/overthinkinglabs/sqd/src/services/commands"
 	"github.com/overthinkinglabs/sqd/src/services/files"
 )
 
 func NewDispatcher() *commands.Dispatcher {
-	utils := services.NewUtils()
+	defaultConfig := models.NewDefaultConfig()
+	utils := services.NewUtils(defaultConfig)
 	processor := files.NewProcessor(utils)
 
 	parallelizer := files.NewParallelizer(utils)

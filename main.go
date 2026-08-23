@@ -12,6 +12,7 @@ import (
 	"github.com/overthinkinglabs/sqd/src/models/displayable_errors"
 	"github.com/overthinkinglabs/sqd/src/services"
 	"github.com/overthinkinglabs/sqd/src/services/commands"
+	"github.com/overthinkinglabs/sqd/src/services/default_config"
 	"github.com/overthinkinglabs/sqd/src/services/dry_mode"
 	"github.com/overthinkinglabs/sqd/src/services/files"
 	"github.com/overthinkinglabs/sqd/src/services/sql"
@@ -65,6 +66,7 @@ func executeQuery(
 	dryRun bool,
 	showDetailedOutputInDryMode bool,
 	outputFormat models.OutputFormat,
+	defaultConfig *models.DefaultConfig,
 ) error {
 	expander := variables.NewExpander()
 	expandedQuery := expander.Expand(query, definedVariables)
@@ -76,15 +78,21 @@ func executeQuery(
 
 	extractor := sql.NewExtractor()
 	batchParser := sql.NewBatchParser(extractor)
-	commandBuilder := sql.NewCommandBuilder()
+	commandBuilder := sql.NewCommandBuilderWithAliases(defaultConfig.FromAliases)
 	parser := sql.NewParser(extractor, batchParser, commandBuilder)
 	command, err := parser.Parse(expandedQuery)
 	if err != nil {
 		return err
 	}
 
-	utils := services.NewUtils()
-	finder := files.NewFinder()
+	utils := services.NewUtils(defaultConfig)
+
+	ignoreList, ignoreErr := files.LoadIgnoreList(".sqdignore")
+	if ignoreErr != nil {
+		return ignoreErr
+	}
+
+	finder := files.NewFinder(ignoreList)
 	processor := files.NewProcessor(utils)
 	parallelizer := files.NewParallelizer(utils)
 
@@ -155,6 +163,7 @@ func executeQueriesFromFile(
 	dryRun bool,
 	showDetailedOutputInDryMode bool,
 	outputFormat models.OutputFormat,
+	defaultConfig *models.DefaultConfig,
 ) error {
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -182,6 +191,7 @@ func executeQueriesFromFile(
 			dryRun,
 			showDetailedOutputInDryMode,
 			outputFormat,
+			defaultConfig,
 		); err != nil {
 			return err
 		}
@@ -194,9 +204,9 @@ func executeQueriesFromFile(
 	return nil
 }
 
-func registerCommonFlags(flagSet *flag.FlagSet, variables map[string]string) (*bool, *string) {
-	transactionFlag := flagSet.Bool("transaction", false, "Enable transaction mode with rollback on failure")
-	flagSet.BoolVar(transactionFlag, "t", false, "Enable transaction mode with rollback on failure")
+func registerCommonFlags(flagSet *flag.FlagSet, variables map[string]string, defaultTransaction bool) (*bool, *string) {
+	transactionFlag := flagSet.Bool("transaction", defaultTransaction, "Enable transaction mode with rollback on failure")
+	flagSet.BoolVar(transactionFlag, "t", defaultTransaction, "Enable transaction mode with rollback on failure")
 	queryFile := flagSet.String("file", "", "Path to a file containing queries to execute")
 	flagSet.StringVar(queryFile, "f", "", "Path to a file containing queries to execute")
 	registerVariableFlag(flagSet, variables)
@@ -204,13 +214,39 @@ func registerCommonFlags(flagSet *flag.FlagSet, variables map[string]string) (*b
 	return transactionFlag, queryFile
 }
 
-func handleDryModeCommand(args []string, errorHandler *services.ErrorHandler) {
+func handleInitCommand(loader *default_config.Loader, errorHandler *services.ErrorHandler) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		handleError(errorHandler, err)
+	}
+
+	initializer := default_config.NewInitializer(loader)
+
+	configPath, configCreated, ignorePath, ignoreCreated, err := initializer.InitResult(cwd)
+	if err != nil {
+		handleError(errorHandler, err)
+	}
+
+	if configCreated {
+		fmt.Printf("Created global config: %s\n", configPath)
+	} else {
+		fmt.Printf("Global config already exists: %s\n", configPath)
+	}
+
+	if ignoreCreated {
+		fmt.Printf("Created local ignore file: %s\n", ignorePath)
+	} else {
+		fmt.Printf("Local ignore file already exists: %s\n", ignorePath)
+	}
+}
+
+func handleDryModeCommand(args []string, errorHandler *services.ErrorHandler, defaultConfig *models.DefaultConfig) {
 	dryFlagSet := flag.NewFlagSet("dry", flag.ExitOnError)
 	completeFlag := dryFlagSet.Bool("complete", false, "Show file names with modified lines")
 	dryFlagSet.BoolVar(completeFlag, "c", false, "Show file names with modified lines")
 
 	definedVariables := make(map[string]string)
-	transactionFlag, queryFile := registerCommonFlags(dryFlagSet, definedVariables)
+	transactionFlag, queryFile := registerCommonFlags(dryFlagSet, definedVariables, false)
 
 	if err := dryFlagSet.Parse(args); err != nil {
 		handleError(errorHandler, err)
@@ -223,6 +259,7 @@ func handleDryModeCommand(args []string, errorHandler *services.ErrorHandler) {
 			*transactionFlag,
 			true, *completeFlag,
 			models.TextOutput,
+			defaultConfig,
 		); err != nil {
 			handleError(errorHandler, err)
 		}
@@ -242,12 +279,14 @@ func handleDryModeCommand(args []string, errorHandler *services.ErrorHandler) {
 
 	query := strings.Join(dryFlagSet.Args(), " ")
 
-	if err := executeQuery(query,
+	if err := executeQuery(
+		query,
 		definedVariables,
 		*transactionFlag,
 		true,
 		*completeFlag,
 		models.TextOutput,
+		defaultConfig,
 	); err != nil {
 		handleError(errorHandler, err)
 	}
@@ -255,8 +294,20 @@ func handleDryModeCommand(args []string, errorHandler *services.ErrorHandler) {
 
 func main() {
 	errorHandler := services.NewErrorHandler()
+	loader := default_config.NewLoader()
+
+	if len(os.Args) > 1 && os.Args[1] == "init" {
+		handleInitCommand(loader, errorHandler)
+		return
+	}
+
+	defaultConfig, configErr := loader.LoadConfig()
+	if configErr != nil {
+		handleError(errorHandler, configErr)
+	}
+
 	if len(os.Args) > 1 && os.Args[1] == "dry" {
-		handleDryModeCommand(os.Args[2:], errorHandler)
+		handleDryModeCommand(os.Args[2:], errorHandler, defaultConfig)
 		return
 	}
 
@@ -264,7 +315,7 @@ func main() {
 	flag.BoolVar(versionFlag, "v", false, "Print version information")
 
 	definedVariables := make(map[string]string)
-	transactionFlag, queryFile := registerCommonFlags(flag.CommandLine, definedVariables)
+	transactionFlag, queryFile := registerCommonFlags(flag.CommandLine, definedVariables, false)
 
 	jsonFlag := flag.Bool("json", false, "Print query output as JSON")
 	csvFlag := flag.Bool("csv", false, "Print query output as CSV")
@@ -297,6 +348,7 @@ func main() {
 			false,
 			false,
 			outputFormat,
+			defaultConfig,
 		); err != nil {
 			handleError(errorHandler, err)
 		}
@@ -308,6 +360,7 @@ func main() {
 		fmt.Println("sqd | A SQL-like document editor")
 		fmt.Println("\nUsage: sqd [flags] 'query'")
 		fmt.Println("       sqd dry [flags] 'query'")
+		fmt.Println("       sqd init")
 		fmt.Println("\nStatements:")
 		fmt.Println("  SELECT	Display matching lines")
 		fmt.Println("  UPDATE	Replace content in matching lines")
@@ -331,6 +384,7 @@ func main() {
 		fmt.Println("  sqd -f path/to/file")
 		fmt.Println("  sqd --var old=foo --var new=bar 'UPDATE *.md SET content=\"$new\" WHERE content = \"$old\"'")
 		fmt.Println("\nCommands:")
+		fmt.Println("  init              Create global config and local .sqdignore")
 		fmt.Println("  dry               Show what would be done without making changes")
 		fmt.Println("    -c, --complete  Show file names with modified lines")
 		fmt.Println("\nFlags:")
@@ -345,7 +399,7 @@ func main() {
 
 	sql := strings.Join(flag.Args(), " ")
 
-	if err := executeQuery(sql, definedVariables, *transactionFlag, false, false, outputFormat); err != nil {
+	if err := executeQuery(sql, definedVariables, *transactionFlag, false, false, outputFormat, defaultConfig); err != nil {
 		handleError(errorHandler, err)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -38,7 +39,8 @@ func createLineReaderTestFile(t *testing.T) string {
 func newSearcherAndCounter(t *testing.T) (*commands.Searcher, *commands.Counter) {
 	t.Helper()
 
-	utils := services.NewUtils()
+	defaultConfig := models.NewDefaultConfig()
+	utils := services.NewUtils(defaultConfig)
 	parallelizer := files.NewParallelizer(utils)
 	sorter := commands.NewSorter()
 	searcher := commands.NewSearcher(parallelizer, sorter, utils)
@@ -339,6 +341,34 @@ func TestSearcherSelectLine(t *testing.T) {
 
 	if strings.TrimSpace(output) != "2" {
 		t.Errorf("expected line number '2', got %q", output)
+	}
+}
+
+func TestSearcherRespectsSelectColumnOrder(t *testing.T) {
+	file := createSemanticTestFile(t)
+	searcher, _ := newSearcherAndCounter(t)
+
+	parser := mock.NewParser()
+	command := parser.Parse("SELECT content, line, name FROM semantic_test.txt WHERE content = 'pattern line'")
+
+	output := captureOutput(t, func() {
+		_, _ = searcher.Select([]string{file}, command, models.TextOutput)
+	})
+
+	ansiEscape := regexp.MustCompile(`\x1b\[[0-9;]*m`)
+	cleanOutput := ansiEscape.ReplaceAllString(output, "")
+	fields := strings.Split(strings.TrimSpace(cleanOutput), "\t")
+	if len(fields) != 3 {
+		t.Fatalf("expected 3 fields, got %d: %q", len(fields), cleanOutput)
+	}
+	if fields[0] != "pattern line" {
+		t.Errorf("expected content first, got %q", fields[0])
+	}
+	if fields[1] != "2" {
+		t.Errorf("expected line second, got %q", fields[1])
+	}
+	if !strings.HasSuffix(fields[2], "semantic_test.txt") {
+		t.Errorf("expected name last, got %q", fields[2])
 	}
 }
 

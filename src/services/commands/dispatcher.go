@@ -83,13 +83,19 @@ func (dispatcher *Dispatcher) Execute(command models.Command, files []string, us
 	if command.Action == models.COUNT {
 		total, stats, err := dispatcher.counter.Count(files, command)
 		dispatcher.printCount(total, outputFormat)
-		dispatcher.utils.PrintStats(stats)
+		if outputFormat == models.TextOutput {
+			dispatcher.utils.PrintStats(stats)
+		}
+
 		return err
 	}
 
 	if command.Action == models.SELECT {
 		stats, err := dispatcher.searcher.Select(files, command, outputFormat)
-		dispatcher.utils.PrintStats(stats)
+		if outputFormat == models.TextOutput {
+			dispatcher.utils.PrintStats(stats)
+		}
+
 		return err
 	}
 
@@ -122,7 +128,10 @@ func (dispatcher *Dispatcher) Execute(command models.Command, files []string, us
 				return err
 			}
 			dispatcher.utils.PrintUpdateMessage(total)
-			dispatcher.utils.PrintStats(stats)
+			if outputFormat == models.TextOutput {
+				dispatcher.utils.PrintStats(stats)
+			}
+
 			return nil
 		}
 
@@ -149,12 +158,18 @@ func (dispatcher *Dispatcher) Execute(command models.Command, files []string, us
 
 		if errorCollection.HasErrors() {
 			dispatcher.utils.PrintUpdateMessage(total)
-			dispatcher.utils.PrintStats(stats)
+			if outputFormat == models.TextOutput {
+				dispatcher.utils.PrintStats(stats)
+			}
+
 			return errorCollection
 		}
 
 		dispatcher.utils.PrintUpdateMessage(total)
-		dispatcher.utils.PrintStats(stats)
+		if outputFormat == models.TextOutput {
+			dispatcher.utils.PrintStats(stats)
+		}
+
 		return nil
 	}
 
@@ -185,8 +200,12 @@ func (dispatcher *Dispatcher) Execute(command models.Command, files []string, us
 			if err != nil {
 				return err
 			}
+
 			dispatcher.utils.PrintDeleteMessage(total)
-			dispatcher.utils.PrintStats(stats)
+			if outputFormat == models.TextOutput {
+				dispatcher.utils.PrintStats(stats)
+			}
+
 			return nil
 		}
 
@@ -214,12 +233,18 @@ func (dispatcher *Dispatcher) Execute(command models.Command, files []string, us
 
 		if errorCollection.HasErrors() {
 			dispatcher.utils.PrintDeleteMessage(total)
-			dispatcher.utils.PrintStats(stats)
+			if outputFormat == models.TextOutput {
+				dispatcher.utils.PrintStats(stats)
+			}
+
 			return errorCollection
 		}
 
 		dispatcher.utils.PrintDeleteMessage(total)
-		dispatcher.utils.PrintStats(stats)
+		if outputFormat == models.TextOutput {
+			dispatcher.utils.PrintStats(stats)
+		}
+
 		return nil
 	}
 

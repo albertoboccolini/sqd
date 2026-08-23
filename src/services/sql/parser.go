@@ -171,8 +171,44 @@ func (parser *Parser) parseLimit() int {
 	return limit
 }
 
+func (parser *Parser) parseSelectTargets(statement *ast.Select) {
+	statement.Targets = nil
+
+	for {
+		if parser.peekTokenIs(models.NAME) {
+			parser.nextToken()
+			statement.Targets = append(statement.Targets, models.NAME)
+		}
+
+		if parser.peekTokenIs(models.CONTENT) {
+			parser.nextToken()
+			statement.Targets = append(statement.Targets, models.CONTENT)
+		}
+
+		if parser.peekTokenIs(models.LINE) {
+			parser.nextToken()
+			statement.Targets = append(statement.Targets, models.LINE)
+		}
+
+		if parser.peekTokenIs(models.ASTERISK) {
+			parser.nextToken()
+			statement.Targets = append(statement.Targets, models.ASTERISK)
+		}
+
+		if !parser.peekTokenIs(models.COMMA) {
+			break
+		}
+
+		parser.nextToken()
+	}
+
+	if len(statement.Targets) == 1 {
+		statement.Target = statement.Targets[0]
+	}
+}
+
 func (parser *Parser) parseSelectStatement() ast.Node {
-	statement := &ast.Select{Target: models.ASTERISK}
+	statement := &ast.Select{Target: models.ASTERISK, Targets: []models.TokenType{models.ASTERISK}}
 
 	if parser.peekTokenIs(models.COUNT) {
 		statement.IsCount = true
@@ -183,24 +219,7 @@ func (parser *Parser) parseSelectStatement() ast.Node {
 		}
 	}
 
-	if parser.peekTokenIs(models.NAME) {
-		statement.Target = models.NAME
-		parser.nextToken()
-	}
-
-	if parser.peekTokenIs(models.CONTENT) {
-		statement.Target = models.CONTENT
-		parser.nextToken()
-	}
-
-	if parser.peekTokenIs(models.LINE) {
-		statement.Target = models.LINE
-		parser.nextToken()
-	}
-
-	if parser.peekTokenIs(models.ASTERISK) {
-		parser.nextToken()
-	}
+	parser.parseSelectTargets(statement)
 
 	for !parser.currentTokenIs(models.EOF) {
 		if parser.currentTokenIs(models.FROM) {

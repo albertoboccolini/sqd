@@ -14,6 +14,7 @@ type Command struct {
 	Deletions      []Deletion
 	IsBatch        bool
 	SelectTarget   TokenType
+	SelectTargets  []TokenType
 	WhereTarget    TokenType
 	WherePattern   *regexp.Regexp
 	NegateFileName bool

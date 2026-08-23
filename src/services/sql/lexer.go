@@ -73,7 +73,8 @@ func (lexer *Lexer) readIdentifier() string {
 		lexer.currentChar == '*' ||
 		lexer.currentChar == '%' ||
 		lexer.currentChar == '-' ||
-		lexer.currentChar == '/' {
+		lexer.currentChar == '/' ||
+		lexer.currentChar >= 0x80 {
 		lexer.readChar()
 	}
 
@@ -122,7 +123,7 @@ func (lexer *Lexer) NextToken() models.Token {
 		token.Literal = ""
 		return token
 	case '*':
-		if lexer.isLetter(lexer.peekChar()) || lexer.peekChar() == '.' || lexer.peekChar() == '/' {
+		if lexer.isLetter(lexer.peekChar()) || lexer.peekChar() == '.' || lexer.peekChar() == '/' || lexer.peekChar() >= 0x80 {
 			token.Literal = lexer.readIdentifier()
 			token.Type = models.IDENTIFIER
 			return token
@@ -135,7 +136,8 @@ func (lexer *Lexer) NextToken() models.Token {
 	if lexer.isLetter(lexer.currentChar) ||
 		lexer.currentChar == '%' ||
 		lexer.currentChar == '/' ||
-		lexer.isDigit(lexer.currentChar) {
+		lexer.isDigit(lexer.currentChar) ||
+		lexer.currentChar >= 0x80 {
 		token.Literal = lexer.readIdentifier()
 		token.Type = lexer.lookupKeyword(token.Literal)
 		return token
