@@ -9,14 +9,16 @@ import (
 )
 
 type Deleter struct {
-	processor *files.Processor
-	utils     *services.Utils
+	processor  *files.Processor
+	lineReader *LineReader
+	utils      *services.Utils
 }
 
-func NewDeleter(processor *files.Processor, utils *services.Utils) *Deleter {
+func NewDeleter(processor *files.Processor, utils *services.Utils, lineReader *LineReader) *Deleter {
 	return &Deleter{
-		processor: processor,
-		utils:     utils,
+		processor:  processor,
+		lineReader: lineReader,
+		utils:      utils,
 	}
 }
 
@@ -25,12 +27,7 @@ func (deleter *Deleter) Single(file string, pattern *regexp.Regexp, negate bool)
 		filtered := []string{}
 		count := 0
 		for _, line := range lines {
-			matches := pattern.MatchString(line)
-			if negate {
-				matches = !matches
-			}
-
-			if !matches {
+			if !deleter.lineReader.MatchesCondition(line, pattern, negate) {
 				filtered = append(filtered, line)
 				continue
 			}
@@ -48,12 +45,7 @@ func (deleter *Deleter) Batch(file string, deletions []models.Deletion) (int, er
 		for _, line := range lines {
 			shouldDelete := false
 			for _, deletion := range deletions {
-				matches := deletion.Pattern.MatchString(line)
-				if deletion.Negate {
-					matches = !matches
-				}
-
-				if matches {
+				if deleter.lineReader.MatchesCondition(line, deletion.Pattern, deletion.Negate) {
 					shouldDelete = true
 					break
 				}

@@ -1,17 +1,12 @@
 package default_config
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/overthinkinglabs/sqd/src/models"
-)
-
-const (
-	configDirName  = "sqd"
-	configFileName = "config.json"
 )
 
 type Loader struct{}
@@ -38,8 +33,8 @@ func (loader *Loader) expandTilde(path string) string {
 }
 
 func (loader *Loader) configPath() string {
-	configDir := loader.expandTilde(filepath.Join("~", ".config", configDirName))
-	return filepath.Join(configDir, configFileName)
+	configDir := loader.expandTilde(filepath.Join("~", ".config", "sqd"))
+	return filepath.Join(configDir, "config.json")
 }
 
 func (loader *Loader) LoadConfig() (*models.DefaultConfig, error) {

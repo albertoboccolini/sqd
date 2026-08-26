@@ -54,14 +54,14 @@ func (parser *Parser) parseComparison() (*regexp.Regexp, bool) {
 		parser.nextToken()
 		exactMatch := parser.currentToken.Literal
 		parser.nextToken()
-		return regexp.MustCompile("^" + regexp.QuoteMeta(exactMatch) + "$"), isNotEquals
+		return parser.extractor.compileExact(exactMatch), isNotEquals
 	}
 
 	if parser.currentTokenIs(models.LIKE) {
 		parser.nextToken()
 		likePattern := parser.currentToken.Literal
 		parser.nextToken()
-		return parser.extractor.likeToRegex(likePattern), false
+		return parser.extractor.compileLike(likePattern), false
 	}
 
 	return nil, false
@@ -201,14 +201,10 @@ func (parser *Parser) parseSelectTargets(statement *ast.Select) {
 
 		parser.nextToken()
 	}
-
-	if len(statement.Targets) == 1 {
-		statement.Target = statement.Targets[0]
-	}
 }
 
 func (parser *Parser) parseSelectStatement() ast.Node {
-	statement := &ast.Select{Target: models.ASTERISK, Targets: []models.TokenType{models.ASTERISK}}
+	statement := &ast.Select{Targets: []models.TokenType{models.ASTERISK}}
 
 	if parser.peekTokenIs(models.COUNT) {
 		statement.IsCount = true

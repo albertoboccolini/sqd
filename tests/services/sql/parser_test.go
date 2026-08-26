@@ -276,8 +276,8 @@ func TestParseCountNameWithOrderBy(t *testing.T) {
 		t.Fatalf("expected COUNT, got %v", command.Action)
 	}
 
-	if command.SelectTarget != models.NAME {
-		t.Fatalf("expected SelectTarget NAME, got %v", command.SelectTarget)
+	if len(command.SelectTargets) != 1 || command.SelectTargets[0] != models.NAME {
+		t.Fatalf("expected SelectTargets [NAME], got %v", command.SelectTargets)
 	}
 
 	if len(command.OrderBy) != 1 {
@@ -339,8 +339,8 @@ func TestParseSelectLine(t *testing.T) {
 	parser := mock.NewParser()
 	command := parser.Parse("SELECT line FROM file.txt WHERE content = 'exact'")
 
-	if command.SelectTarget != models.LINE {
-		t.Fatalf("expected SelectTarget LINE, got %v", command.SelectTarget)
+	if len(command.SelectTargets) != 1 || command.SelectTargets[0] != models.LINE {
+		t.Fatalf("expected SelectTargets [LINE], got %v", command.SelectTargets)
 	}
 }
 

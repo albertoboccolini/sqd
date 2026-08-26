@@ -150,10 +150,9 @@ func (finder *Finder) walkAndCollect(baseDir, filePattern string) ([]string, err
 	}
 
 	waitGroup.Wait()
-	var returnErr error
 	if walkErrors.HasErrors() {
-		returnErr = walkErrors
+		return files, walkErrors
 	}
 
-	return files, returnErr
+	return files, nil
 }

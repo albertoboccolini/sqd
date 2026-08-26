@@ -28,12 +28,16 @@ func (fileReader *FileReader) ValidateAndReadFile(file string) ([]string, error)
 
 	data, err := os.ReadFile(file)
 	if err != nil {
-		if errors.Is(err, os.ErrPermission) {
-			return nil, displayable_errors.NewPermissionDeniedError(file)
-		}
-
-		return nil, err
+		return nil, fileReader.mapReadError(file, err)
 	}
 
 	return strings.Split(string(data), "\n"), nil
+}
+
+func (fileReader *FileReader) mapReadError(file string, err error) error {
+	if errors.Is(err, os.ErrPermission) {
+		return displayable_errors.NewPermissionDeniedError(file)
+	}
+
+	return err
 }

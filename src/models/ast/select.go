@@ -3,7 +3,6 @@ package ast
 import "github.com/overthinkinglabs/sqd/src/models"
 
 type Select struct {
-	Target      models.TokenType
 	Targets     []models.TokenType
 	Source      string
 	WhereClause *Where

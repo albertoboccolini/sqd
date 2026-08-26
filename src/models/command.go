@@ -13,7 +13,6 @@ type Command struct {
 	Replacements   []Replacement
 	Deletions      []Deletion
 	IsBatch        bool
-	SelectTarget   TokenType
 	SelectTargets  []TokenType
 	WhereTarget    TokenType
 	WherePattern   *regexp.Regexp

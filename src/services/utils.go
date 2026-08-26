@@ -58,22 +58,21 @@ func (utils *Utils) CanWriteFile(path string) bool {
 	return true
 }
 
-func (utils *Utils) PrintUpdateMessage(count int) {
+func (utils *Utils) printLineCountMessage(count int, action string) {
 	if count == 1 {
-		fmt.Println("1 line updated")
+		fmt.Printf("1 line %s\n", action)
 		return
 	}
 
-	fmt.Printf("%d lines updated\n", count)
+	fmt.Printf("%d lines %s\n", count, action)
+}
+
+func (utils *Utils) PrintUpdateMessage(count int) {
+	utils.printLineCountMessage(count, "updated")
 }
 
 func (utils *Utils) PrintDeleteMessage(count int) {
-	if count == 1 {
-		fmt.Println("1 line deleted")
-		return
-	}
-
-	fmt.Printf("%d lines deleted\n", count)
+	utils.printLineCountMessage(count, "deleted")
 }
 
 func (utils *Utils) PrintStats(stats models.ExecutionStats) {

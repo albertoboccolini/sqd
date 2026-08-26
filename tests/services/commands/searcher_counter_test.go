@@ -43,8 +43,9 @@ func newSearcherAndCounter(t *testing.T) (*commands.Searcher, *commands.Counter)
 	utils := services.NewUtils(defaultConfig)
 	parallelizer := files.NewParallelizer(utils)
 	sorter := commands.NewSorter()
-	searcher := commands.NewSearcher(parallelizer, sorter, utils)
-	counter := commands.NewCounter(parallelizer, searcher)
+	lineReader := commands.NewLineReader()
+	searcher := commands.NewSearcher(parallelizer, sorter, utils, lineReader)
+	counter := commands.NewCounter(parallelizer, searcher, lineReader)
 
 	return searcher, counter
 }

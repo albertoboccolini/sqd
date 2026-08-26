@@ -5,18 +5,36 @@ import (
 	"errors"
 	"io"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/overthinkinglabs/sqd/src/models"
 	"github.com/overthinkinglabs/sqd/src/models/displayable_errors"
 )
 
-type lineHandler func(line string, lineNumber int) error
+type LineReader struct{}
 
-func readFileLines(file string, handler lineHandler) error {
+func NewLineReader() *LineReader {
+	return &LineReader{}
+}
+
+func (lineReader *LineReader) MatchesCondition(line string, pattern *regexp.Regexp, negate bool) bool {
+	if pattern == nil {
+		return true
+	}
+
+	matches := pattern.MatchString(line)
+	if negate {
+		matches = !matches
+	}
+
+	return matches
+}
+
+func (lineReader *LineReader) ReadFileLines(file string, handler func(line string, lineNumber int) error) error {
 	fileHandle, err := os.Open(file)
 	if err != nil {
-		return mapReadError(file, err)
+		return lineReader.MapReadError(file, err)
 	}
 	defer func() { _ = fileHandle.Close() }()
 
@@ -47,7 +65,7 @@ func readFileLines(file string, handler lineHandler) error {
 	}
 }
 
-func mapReadError(file string, err error) error {
+func (lineReader *LineReader) MapReadError(file string, err error) error {
 	if errors.Is(err, os.ErrPermission) {
 		return displayable_errors.NewPermissionDeniedError(file)
 	}
@@ -55,13 +73,13 @@ func mapReadError(file string, err error) error {
 	return displayable_errors.NewFileReadError(file, err)
 }
 
-func mergeErrors(errorCollection *models.ErrorCollection, source *models.ErrorCollection) {
+func (lineReader *LineReader) MergeErrors(errorCollection *models.ErrorCollection, source *models.ErrorCollection) {
 	for _, err := range source.Errors() {
 		errorCollection.Add(err)
 	}
 }
 
-func errorCollectionOrNil(errorCollection *models.ErrorCollection) error {
+func (lineReader *LineReader) ErrorCollectionOrNil(errorCollection *models.ErrorCollection) error {
 	if errorCollection.HasErrors() {
 		return errorCollection
 	}

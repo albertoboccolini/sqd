@@ -2,7 +2,7 @@ package commands
 
 import (
 	"encoding/csv"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -39,6 +39,7 @@ type Searcher struct {
 	parallelizer *files.Parallelizer
 	sorter       *Sorter
 	utils        *services.Utils
+	lineReader   *LineReader
 }
 
 type searchResult struct {
@@ -52,11 +53,12 @@ type fileResults struct {
 	hasMatch bool
 }
 
-func NewSearcher(parallelizer *files.Parallelizer, sorter *Sorter, utils *services.Utils) *Searcher {
+func NewSearcher(parallelizer *files.Parallelizer, sorter *Sorter, utils *services.Utils, lineReader *LineReader) *Searcher {
 	return &Searcher{
 		parallelizer: parallelizer,
 		sorter:       sorter,
 		utils:        utils,
+		lineReader:   lineReader,
 	}
 }
 
@@ -68,12 +70,17 @@ func (searcher *Searcher) limitResults(results []searchResult, limit int) []sear
 	return results[:limit]
 }
 
+func (searcher *Searcher) sortAndLimit(results []searchResult, command models.Command) []searchResult {
+	searcher.sorter.sortResults(results, command.OrderBy)
+	return searcher.limitResults(results, command.Limit)
+}
+
 func (searcher *Searcher) selectTargets(command models.Command) []models.TokenType {
 	if len(command.SelectTargets) > 0 {
 		return command.SelectTargets
 	}
 
-	return []models.TokenType{command.SelectTarget}
+	return []models.TokenType{models.ASTERISK}
 }
 
 func (searcher *Searcher) effectiveTargets(targets []models.TokenType) []models.TokenType {
@@ -88,24 +95,41 @@ func (searcher *Searcher) includesTarget(targets []models.TokenType, target mode
 	return slices.Contains(targets, target)
 }
 
+func (searcher *Searcher) targetValue(result searchResult, target models.TokenType, command models.Command) any {
+	switch target {
+	case models.NAME:
+		return displayName(result.filePath, command.File)
+	case models.LINE:
+		return result.lineNumber
+	case models.CONTENT:
+		return result.lineContent
+	}
+
+	return nil
+}
+
+func (searcher *Searcher) targetName(target models.TokenType) string {
+	switch target {
+	case models.NAME:
+		return "name"
+	case models.LINE:
+		return "line"
+	case models.CONTENT:
+		return "content"
+	}
+
+	return ""
+}
+
 func (searcher *Searcher) printJSONResults(results []searchResult, command models.Command) {
 	targets := searcher.effectiveTargets(searcher.selectTargets(command))
 	records := make([]map[string]any, 0, len(results))
 
 	for _, result := range results {
 		record := make(map[string]any)
-
 		for _, target := range targets {
-			switch target {
-			case models.NAME:
-				record["name"] = displayName(result.filePath, command.File)
-			case models.LINE:
-				record["line"] = result.lineNumber
-			case models.CONTENT:
-				record["content"] = result.lineContent
-			}
+			record[searcher.targetName(target)] = searcher.targetValue(result, target, command)
 		}
-
 		records = append(records, record)
 	}
 
@@ -120,32 +144,16 @@ func (searcher *Searcher) printCSVResults(results []searchResult, command models
 
 	header := make([]string, 0, len(targets))
 	for _, target := range targets {
-		switch target {
-		case models.NAME:
-			header = append(header, "name")
-		case models.LINE:
-			header = append(header, "line")
-		case models.CONTENT:
-			header = append(header, "content")
-		}
+		header = append(header, searcher.targetName(target))
 	}
 
 	_ = writer.Write(header)
 
 	for _, result := range results {
 		row := make([]string, 0, len(header))
-
 		for _, target := range targets {
-			switch target {
-			case models.NAME:
-				row = append(row, displayName(result.filePath, command.File))
-			case models.LINE:
-				row = append(row, fmt.Sprintf("%d", result.lineNumber))
-			case models.CONTENT:
-				row = append(row, result.lineContent)
-			}
+			row = append(row, fmt.Sprintf("%v", searcher.targetValue(result, target, command)))
 		}
-
 		_ = writer.Write(row)
 	}
 }
@@ -177,32 +185,19 @@ func (searcher *Searcher) filterFilesByName(files []string, pattern *regexp.Rege
 	return filtered
 }
 
-func matchesCondition(line string, pattern *regexp.Regexp, negate bool) bool {
-	if pattern == nil {
-		return true
-	}
-
-	matches := pattern.MatchString(line)
-	if negate {
-		matches = !matches
-	}
-
-	return matches
-}
-
-func matchesContent(line string, command models.Command) bool {
-	if !matchesCondition(line, command.Pattern, command.NegateContent) {
+func (searcher *Searcher) matchesContent(line string, command models.Command) bool {
+	if !searcher.lineReader.MatchesCondition(line, command.Pattern, command.NegateContent) {
 		return false
 	}
 
-	return matchesCondition(line, command.ExtraPattern, command.ExtraNegate)
+	return searcher.lineReader.MatchesCondition(line, command.ExtraPattern, command.ExtraNegate)
 }
 
-func countMatchingLines(file string, command models.Command) (int, error) {
+func (searcher *Searcher) countMatchingLines(file string, command models.Command) (int, error) {
 	count := 0
 
-	err := readFileLines(file, func(line string, lineNumber int) error {
-		if matchesContent(line, command) {
+	err := searcher.lineReader.ReadFileLines(file, func(line string, lineNumber int) error {
+		if searcher.matchesContent(line, command) {
 			count++
 		}
 
@@ -252,7 +247,7 @@ func (searcher *Searcher) Select(files []string, command models.Command, outputF
 	if command.WhereTarget == models.NAME && (includeAll || includeContent || includeLine) {
 		results := make([]searchResult, 0)
 		for _, file := range files {
-			err := readFileLines(file, func(line string, lineNumber int) error {
+			err := searcher.lineReader.ReadFileLines(file, func(line string, lineNumber int) error {
 				results = append(results, searchResult{
 					filePath:    file,
 					lineNumber:  lineNumber,
@@ -274,11 +269,11 @@ func (searcher *Searcher) Select(files []string, command models.Command, outputF
 
 		if outputFormat != models.TextOutput {
 			searcher.printStructuredResults(results, command, outputFormat)
-			return stats, errorCollectionOrNil(errorCollection)
+			return stats, searcher.lineReader.ErrorCollectionOrNil(errorCollection)
 		}
 
 		searcher.printTextResults(results, command, searcher.selectTargets(command))
-		return stats, errorCollectionOrNil(errorCollection)
+		return stats, searcher.lineReader.ErrorCollectionOrNil(errorCollection)
 	}
 
 	allFileResults := make([]fileResults, len(files))
@@ -286,8 +281,8 @@ func (searcher *Searcher) Select(files []string, command models.Command, outputF
 	readErrors := searcher.parallelizer.ProcessFilesInParallelWithIndex(files, func(index int, file string) error {
 		searchResults := fileResults{results: make([]searchResult, 0)}
 
-		err := readFileLines(file, func(line string, lineNumber int) error {
-			if matchesContent(line, command) {
+		err := searcher.lineReader.ReadFileLines(file, func(line string, lineNumber int) error {
+			if searcher.matchesContent(line, command) {
 				searchResults.hasMatch = true
 				searchResults.results = append(searchResults.results, searchResult{
 					filePath:    file,
@@ -306,7 +301,7 @@ func (searcher *Searcher) Select(files []string, command models.Command, outputF
 		return nil
 	}, &stats)
 
-	mergeErrors(errorCollection, readErrors)
+	searcher.lineReader.MergeErrors(errorCollection, readErrors)
 
 	results := make([]searchResult, 0)
 	filesWithMatches := make([]string, 0)
@@ -330,26 +325,25 @@ func (searcher *Searcher) Select(files []string, command models.Command, outputF
 
 		if outputFormat != models.TextOutput {
 			searcher.printStructuredResults(nameResults, command, outputFormat)
-			return stats, errorCollectionOrNil(errorCollection)
+			return stats, searcher.lineReader.ErrorCollectionOrNil(errorCollection)
 		}
 
 		for _, result := range nameResults {
 			fmt.Printf("%s\n", searcher.utils.HighlightName(displayName(result.filePath, command.File), command.Pattern))
 		}
 
-		return stats, errorCollectionOrNil(errorCollection)
+		return stats, searcher.lineReader.ErrorCollectionOrNil(errorCollection)
 	}
 
-	searcher.sorter.sortResults(results, command.OrderBy)
-	results = searcher.limitResults(results, command.Limit)
+	results = searcher.sortAndLimit(results, command)
 
 	if outputFormat != models.TextOutput {
 		searcher.printStructuredResults(results, command, outputFormat)
-		return stats, errorCollectionOrNil(errorCollection)
+		return stats, searcher.lineReader.ErrorCollectionOrNil(errorCollection)
 	}
 
 	searcher.printTextResults(results, command, searcher.selectTargets(command))
-	return stats, errorCollectionOrNil(errorCollection)
+	return stats, searcher.lineReader.ErrorCollectionOrNil(errorCollection)
 }
 
 func (searcher *Searcher) printTextResults(results []searchResult, command models.Command, targets []models.TokenType) {

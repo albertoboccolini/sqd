@@ -67,7 +67,6 @@ func (commandBuilder *CommandBuilder) populateWhere(command *models.Command, whe
 func (commandBuilder *CommandBuilder) VisitSelect(statement *ast.Select) (models.Command, error) {
 	command := models.Command{
 		Action:        models.SELECT,
-		SelectTarget:  statement.Target,
 		SelectTargets: statement.Targets,
 		File:          commandBuilder.resolveSource(statement.Source),
 		OrderBy:       statement.OrderBy,

@@ -16,10 +16,11 @@ func NewDispatcher() *commands.Dispatcher {
 	dryModeRunner := NewDryModeRunner()
 	transactioner := commands.NewTransactioner(utils)
 	sorter := commands.NewSorter()
-	searcher := commands.NewSearcher(parallelizer, sorter, utils)
-	counter := commands.NewCounter(parallelizer, searcher)
-	updater := commands.NewUpdater(processor, utils)
-	deleter := commands.NewDeleter(processor, utils)
+	lineReader := commands.NewLineReader()
+	searcher := commands.NewSearcher(parallelizer, sorter, utils, lineReader)
+	counter := commands.NewCounter(parallelizer, searcher, lineReader)
+	updater := commands.NewUpdater(processor, utils, lineReader)
+	deleter := commands.NewDeleter(processor, utils, lineReader)
 
 	return commands.NewDispatcher(
 		searcher,
