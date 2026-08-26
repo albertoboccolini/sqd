@@ -134,8 +134,7 @@ func (utils *Utils) AddWalkWarnings(errorCollection *models.ErrorCollection, wal
 		return
 	}
 
-	var walkErrorCollection *models.ErrorCollection
-	if errors.As(walkWarnings, &walkErrorCollection) {
+	if walkErrorCollection, ok := errors.AsType[*models.ErrorCollection](walkWarnings); ok {
 		for _, walkErr := range walkErrorCollection.Errors() {
 			errorCollection.Add(walkErr)
 		}

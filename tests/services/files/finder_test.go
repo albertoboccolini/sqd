@@ -128,8 +128,7 @@ func TestFindFilesReturnsErrorCollectionOnPermissionDenied(t *testing.T) {
 		return
 	}
 
-	var errorCollection *models.ErrorCollection
-	if !errors.As(err, &errorCollection) {
+	if _, ok := errors.AsType[*models.ErrorCollection](err); !ok {
 		t.Errorf("should return error collection with walk errors")
 	}
 }
@@ -147,10 +146,9 @@ func TestFindFilesIncludesWalkErrorInCollection(t *testing.T) {
 		return
 	}
 
-	var walkError *displayable_errors.WalkError
 	found := false
 	for _, e := range errorCollection.Errors() {
-		if errors.As(e, &walkError) {
+		if _, ok := errors.AsType[*displayable_errors.WalkError](e); ok {
 			found = true
 			break
 		}

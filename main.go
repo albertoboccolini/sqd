@@ -137,8 +137,7 @@ func executeQuery(
 	)
 
 	if dispatchErr != nil {
-		var errorCollection *models.ErrorCollection
-		if errors.As(dispatchErr, &errorCollection) {
+		if errorCollection, ok := errors.AsType[*models.ErrorCollection](dispatchErr); ok {
 			utils.AddWalkWarnings(errorCollection, walkWarnings)
 			return errorCollection
 		}

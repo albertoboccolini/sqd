@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -84,13 +85,7 @@ func (searcher *Searcher) effectiveTargets(targets []models.TokenType) []models.
 }
 
 func (searcher *Searcher) includesTarget(targets []models.TokenType, target models.TokenType) bool {
-	for _, currentTarget := range targets {
-		if currentTarget == target {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(targets, target)
 }
 
 func (searcher *Searcher) printJSONResults(results []searchResult, command models.Command) {
