@@ -4,7 +4,7 @@ Traditional Unix tools (grep, sed, awk) are powerful but have inconsistent synta
 
 ## Getting Started
 
-This project requires **Go >= 1.26.5**. Make sure you have a compatible version installed. If needed, download the latest version from [https://go.dev/dl/](https://go.dev/dl/)
+This project requires **Go >= 1.27**. Make sure you have a compatible version installed. If needed, download the latest version from [https://go.dev/dl/](https://go.dev/dl/)
 
 1. **Installation**: Install sqd on your system
 
@@ -17,6 +17,32 @@ This project requires **Go >= 1.26.5**. Make sure you have a compatible version 
     ```bash
     sqd 'SELECT * FROM *.md WHERE content LIKE "%- [ ]%"'
     ```
+
+## Initialization
+
+Run `sqd init` to create the global configuration file at `~/.config/sqd/config.json` and a local `.sqdignore` to exclude files and folders. Existing files are never overwritten. Here an example of a `config.json` file with the relative explaination:
+
+```json
+{
+  "output": {
+    "color": "blue",
+    "show_stats": true
+  },
+  "from_aliases": {
+    "obsidian": "/home/user/Documents/obsidian"
+  }
+}
+```
+
+- `output.color`: highlight color for matches. Choose `blue`, `green`, `red`, `yellow`, `cyan`, `purple`, or `none`.
+- `output.show_stats`: print processing stats after text output. Stats are omitted automatically when using `--json` or `--csv`.
+- `from_aliases`: map short names to file patterns or absolute paths. Use them in `FROM`:
+
+    ```bash
+    sqd 'SELECT content FROM obsidian WHERE content LIKE "- [ ]%"'
+    ```
+
+**N.B.** Aliases also work as prefixes. If `"notes": "/home/user/Documents/notes"` is defined, `FROM notes/*.md` resolves to `/home/user/Documents/notes/*.md`.
 
 ## Useful Commands
 
@@ -43,8 +69,9 @@ sqd 'DELETE FROM *.log WHERE content LIKE "%DEBUG%"'
 You can reference the following columns in the `SELECT` clause:
 
 - `name`: the file name.
+- `line`: the line number.
 - `content`: the content of each line.
-- `*`: both file name and content.
+- `*`: file name, line number, and content.
 
 Examples:
 
@@ -80,10 +107,20 @@ sqd 'SELECT * FROM *.md WHERE content LIKE "- [ ]%" ORDER BY content ASC, name D
 
 In this example, lines are sorted alphabetically by `content`, and when two lines have the same content, they are ordered by file name in descending order.
 
+## Limit
+
+Use `LIMIT n` to return only the first `n` results.
+
+```bash
+sqd 'SELECT content FROM *.md WHERE content LIKE "- [ ]%" ORDER BY content LIMIT 10'
+```
+
 ## Flags
 
 - `-f`, `--file`: Runs all queries from a file. Useful for refactoring and repetitive tasks.
 - `-t`, `--transaction`: Apply changes atomically. If any operation fails, all changes are rolled back.
+- `--json`: Print `SELECT` and `COUNT` results as JSON.
+- `--csv`: Print `SELECT` and `COUNT` results as CSV.
 
 ## Dry Mode
 
