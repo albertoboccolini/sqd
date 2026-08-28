@@ -16,25 +16,6 @@ import (
 	"github.com/overthinkinglabs/sqd/src/services/files"
 )
 
-func displayName(file string, pattern string) string {
-	if !strings.Contains(pattern, "/") {
-		return file
-	}
-
-	lastSlash := strings.LastIndex(pattern, "/")
-	baseDir := pattern[:lastSlash]
-	if baseDir == "" {
-		return file
-	}
-
-	relative, err := filepath.Rel(baseDir, file)
-	if err != nil {
-		return file
-	}
-
-	return relative
-}
-
 type Searcher struct {
 	parallelizer *files.Parallelizer
 	sorter       *Sorter
@@ -60,6 +41,25 @@ func NewSearcher(parallelizer *files.Parallelizer, sorter *Sorter, utils *servic
 		utils:        utils,
 		lineReader:   lineReader,
 	}
+}
+
+func (searcher *Searcher) displayName(file string, pattern string) string {
+	if !strings.Contains(pattern, "/") {
+		return file
+	}
+
+	lastSlash := strings.LastIndex(pattern, "/")
+	baseDir := pattern[:lastSlash]
+	if baseDir == "" {
+		return file
+	}
+
+	relative, err := filepath.Rel(baseDir, file)
+	if err != nil {
+		return file
+	}
+
+	return relative
 }
 
 func (searcher *Searcher) limitResults(results []searchResult, limit int) []searchResult {
@@ -98,7 +98,7 @@ func (searcher *Searcher) includesTarget(targets []models.TokenType, target mode
 func (searcher *Searcher) targetValue(result searchResult, target models.TokenType, command models.Command) any {
 	switch target {
 	case models.NAME:
-		return displayName(result.filePath, command.File)
+		return searcher.displayName(result.filePath, command.File)
 	case models.LINE:
 		return result.lineNumber
 	case models.CONTENT:
@@ -237,7 +237,7 @@ func (searcher *Searcher) Select(files []string, command models.Command, outputF
 		}
 
 		for _, result := range results {
-			fmt.Printf("%s\n", searcher.utils.HighlightName(displayName(result.filePath, command.File), command.WherePattern))
+			fmt.Printf("%s\n", searcher.utils.HighlightName(searcher.displayName(result.filePath, command.File), command.WherePattern))
 		}
 
 		stats.Processed = len(files)
@@ -329,7 +329,7 @@ func (searcher *Searcher) Select(files []string, command models.Command, outputF
 		}
 
 		for _, result := range nameResults {
-			fmt.Printf("%s\n", searcher.utils.HighlightName(displayName(result.filePath, command.File), command.Pattern))
+			fmt.Printf("%s\n", searcher.utils.HighlightName(searcher.displayName(result.filePath, command.File), command.Pattern))
 		}
 
 		return stats, searcher.lineReader.ErrorCollectionOrNil(errorCollection)
@@ -354,7 +354,7 @@ func (searcher *Searcher) printTextResults(results []searchResult, command model
 				content = searcher.utils.HighlightMatch(content, command.Pattern)
 			}
 
-			fmt.Printf("%s:%d: %s\n", displayName(result.filePath, command.File), result.lineNumber, content)
+			fmt.Printf("%s:%d: %s\n", searcher.displayName(result.filePath, command.File), result.lineNumber, content)
 		}
 
 		return
@@ -368,7 +368,7 @@ func (searcher *Searcher) printTextResults(results []searchResult, command model
 		for _, target := range effectiveTargets {
 			switch target {
 			case models.NAME:
-				parts = append(parts, searcher.utils.HighlightName(displayName(result.filePath, command.File), command.WherePattern))
+				parts = append(parts, searcher.utils.HighlightName(searcher.displayName(result.filePath, command.File), command.WherePattern))
 			case models.LINE:
 				parts = append(parts, fmt.Sprintf("%d", result.lineNumber))
 			case models.CONTENT:

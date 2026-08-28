@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/overthinkinglabs/sqd/src/models"
@@ -59,6 +60,26 @@ func registerVariableFlag(flagSet *flag.FlagSet, variables map[string]string) {
 	})
 }
 
+func resolveIgnorePath(commandFile string) string {
+	cleaned := filepath.Clean(commandFile)
+
+	if strings.Contains(cleaned, "*") {
+		return filepath.Join(filepath.Dir(cleaned), ".sqdignore")
+	}
+
+	info, statErr := os.Stat(cleaned)
+	if statErr == nil && info.IsDir() {
+		return filepath.Join(cleaned, ".sqdignore")
+	}
+
+	dir := filepath.Dir(cleaned)
+	if dir == "." || dir == cleaned {
+		return ".sqdignore"
+	}
+
+	return filepath.Join(dir, ".sqdignore")
+}
+
 func executeQuery(
 	query string,
 	definedVariables map[string]string,
@@ -78,7 +99,7 @@ func executeQuery(
 
 	extractor := sql.NewExtractor()
 	batchParser := sql.NewBatchParser(extractor)
-	commandBuilder := sql.NewCommandBuilderWithAliases(defaultConfig.FromAliases)
+	commandBuilder := sql.NewCommandBuilder(defaultConfig.FromAliases)
 	parser := sql.NewParser(extractor, batchParser, commandBuilder)
 	command, err := parser.Parse(expandedQuery)
 	if err != nil {
@@ -87,7 +108,7 @@ func executeQuery(
 
 	utils := services.NewUtils(defaultConfig)
 
-	ignoreList, ignoreErr := files.LoadIgnoreList(".sqdignore")
+	ignoreList, ignoreErr := files.LoadIgnoreList(resolveIgnorePath(command.File))
 	if ignoreErr != nil {
 		return ignoreErr
 	}

@@ -50,6 +50,7 @@ func (transactioner *Transactioner) execute(files []string,
 			transactioner.rollbackFiles(backups)
 			return 0, displayable_errors.NewTransactionFailedError(err.Error())
 		}
+
 		backups = append(backups, fileBackup{original: file, backup: backupPath})
 
 		count, err := mutate(backupPath)
@@ -80,6 +81,7 @@ func (transactioner *Transactioner) checkFilesBeforeTransaction(files []string) 
 			return displayable_errors.NewTransactionFailedError("cannot write " + file)
 		}
 	}
+
 	return nil
 }
 

@@ -12,7 +12,7 @@ type MockParser struct {
 func NewParser() *MockParser {
 	extractor := sql.NewExtractor()
 	batchParser := sql.NewBatchParser(extractor)
-	commandBuilder := sql.NewCommandBuilder()
+	commandBuilder := sql.NewCommandBuilder(make(map[string]string))
 	return &MockParser{
 		parser: sql.NewParser(extractor, batchParser, commandBuilder),
 	}

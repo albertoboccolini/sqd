@@ -11,15 +11,7 @@ type CommandBuilder struct {
 	fromAliases map[string]string
 }
 
-func NewCommandBuilder() *CommandBuilder {
-	return &CommandBuilder{fromAliases: make(map[string]string)}
-}
-
-func NewCommandBuilderWithAliases(fromAliases map[string]string) *CommandBuilder {
-	if fromAliases == nil {
-		fromAliases = make(map[string]string)
-	}
-
+func NewCommandBuilder(fromAliases map[string]string) *CommandBuilder {
 	return &CommandBuilder{fromAliases: fromAliases}
 }
 
