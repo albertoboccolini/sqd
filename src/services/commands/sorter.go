@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"cmp"
 	"sort"
 
 	"github.com/overthinkinglabs/sqd/src/models"
@@ -21,24 +22,11 @@ func (sorter *Sorter) sortResults(results []searchResult, orderBy []models.Order
 		for _, order := range orderBy {
 			var compareResult int
 
-			if order.Column == models.NAME {
-				if results[i].filePath < results[j].filePath {
-					compareResult = -1
-				}
-
-				if results[i].filePath > results[j].filePath {
-					compareResult = 1
-				}
-			}
-
-			if order.Column == models.CONTENT {
-				if results[i].lineContent < results[j].lineContent {
-					compareResult = -1
-				}
-
-				if results[i].lineContent > results[j].lineContent {
-					compareResult = 1
-				}
+			switch order.Column {
+			case models.NAME:
+				compareResult = cmp.Compare(results[i].filePath, results[j].filePath)
+			case models.CONTENT:
+				compareResult = cmp.Compare(results[i].lineContent, results[j].lineContent)
 			}
 
 			if compareResult != 0 {

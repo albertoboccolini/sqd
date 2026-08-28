@@ -1,7 +1,6 @@
 package sql
 
 import (
-	"regexp"
 	"strings"
 
 	"github.com/overthinkinglabs/sqd/src/models"
@@ -33,7 +32,7 @@ func (batchParser *BatchParser) parseDeletions(sql string) []models.Deletion {
 			if token.Type == models.EQUALS {
 				token = lexer.NextToken()
 				if token.Type == models.STRING {
-					deletion.Pattern = regexp.MustCompile("^" + regexp.QuoteMeta(token.Literal) + "$")
+					deletion.Pattern = batchParser.extractor.compileExact(token.Literal)
 					deletion.Negate = false
 					break
 				}
@@ -42,7 +41,7 @@ func (batchParser *BatchParser) parseDeletions(sql string) []models.Deletion {
 			if token.Type == models.NOT_EQUALS {
 				token = lexer.NextToken()
 				if token.Type == models.STRING {
-					deletion.Pattern = regexp.MustCompile("^" + regexp.QuoteMeta(token.Literal) + "$")
+					deletion.Pattern = batchParser.extractor.compileExact(token.Literal)
 					deletion.Negate = true
 					break
 				}
@@ -51,7 +50,7 @@ func (batchParser *BatchParser) parseDeletions(sql string) []models.Deletion {
 			if token.Type == models.LIKE {
 				token = lexer.NextToken()
 				if token.Type == models.STRING {
-					deletion.Pattern = batchParser.extractor.likeToRegex(token.Literal)
+					deletion.Pattern = batchParser.extractor.compileLike(token.Literal)
 					deletion.Negate = false
 					break
 				}
@@ -134,21 +133,19 @@ func setWhereClause(batchParser *BatchParser, replacement *models.Replacement, l
 	case models.EQUALS:
 		token = lexer.NextToken()
 		if token.Type == models.STRING {
-			pattern := regexp.MustCompile("^" + regexp.QuoteMeta(token.Literal) + "$")
-			replacement.Pattern = pattern
+			replacement.Pattern = batchParser.extractor.compileExact(token.Literal)
 			replacement.Negate = false
 		}
 	case models.NOT_EQUALS:
 		token = lexer.NextToken()
 		if token.Type == models.STRING {
-			pattern := regexp.MustCompile("^" + regexp.QuoteMeta(token.Literal) + "$")
-			replacement.Pattern = pattern
+			replacement.Pattern = batchParser.extractor.compileExact(token.Literal)
 			replacement.Negate = true
 		}
 	case models.LIKE:
 		token = lexer.NextToken()
 		if token.Type == models.STRING {
-			replacement.Pattern = batchParser.extractor.likeToRegex(token.Literal)
+			replacement.Pattern = batchParser.extractor.compileLike(token.Literal)
 			replacement.Negate = false
 		}
 	}

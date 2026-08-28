@@ -22,6 +22,55 @@ type fileBackup struct {
 	backup   string
 }
 
+func (transactioner *Transactioner) Update(files []string,
+	updateFunc func(string) (int, error), stats *models.ExecutionStats,
+) (int, error) {
+	return transactioner.execute(files, updateFunc, stats)
+}
+
+func (transactioner *Transactioner) Delete(files []string,
+	deleteFunc func(string) (int, error), stats *models.ExecutionStats,
+) (int, error) {
+	return transactioner.execute(files, deleteFunc, stats)
+}
+
+func (transactioner *Transactioner) execute(files []string,
+	mutate func(string) (int, error), stats *models.ExecutionStats,
+) (int, error) {
+	if err := transactioner.checkFilesBeforeTransaction(files); err != nil {
+		return 0, err
+	}
+
+	backups := make([]fileBackup, 0, len(files))
+	total := 0
+
+	for _, file := range files {
+		backupPath := file + ".sqd_backup"
+		if err := os.Rename(file, backupPath); err != nil {
+			transactioner.rollbackFiles(backups)
+			return 0, displayable_errors.NewTransactionFailedError(err.Error())
+		}
+
+		backups = append(backups, fileBackup{original: file, backup: backupPath})
+
+		count, err := mutate(backupPath)
+		if err != nil {
+			transactioner.rollbackFiles(backups)
+			return 0, displayable_errors.NewTransactionFailedError(err.Error())
+		}
+
+		if err := os.Rename(backupPath, file); err != nil {
+			transactioner.rollbackFiles(backups)
+			return 0, displayable_errors.NewTransactionFailedError(err.Error())
+		}
+
+		total += count
+		stats.Processed++
+	}
+
+	return total, nil
+}
+
 func (transactioner *Transactioner) checkFilesBeforeTransaction(files []string) error {
 	for _, file := range files {
 		if !transactioner.utils.IsPathInsideCwd(file) {
@@ -32,6 +81,7 @@ func (transactioner *Transactioner) checkFilesBeforeTransaction(files []string) 
 			return displayable_errors.NewTransactionFailedError("cannot write " + file)
 		}
 	}
+
 	return nil
 }
 
@@ -41,76 +91,4 @@ func (transactioner *Transactioner) rollbackFiles(backups []fileBackup) {
 			fmt.Fprintf(os.Stderr, "Rollback failed for %s -> %s: %v\n", backup.backup, backup.original, err)
 		}
 	}
-}
-
-func (transactioner *Transactioner) Update(files []string,
-	updateFunc func(string) (int, error), stats *models.ExecutionStats,
-) (int, error) {
-	if err := transactioner.checkFilesBeforeTransaction(files); err != nil {
-		return 0, err
-	}
-
-	backups := make([]fileBackup, 0, len(files))
-	total := 0
-
-	for _, file := range files {
-		backupPath := file + ".sqd_backup"
-		if err := os.Rename(file, backupPath); err != nil {
-			transactioner.rollbackFiles(backups)
-			return 0, displayable_errors.NewTransactionFailedError(err.Error())
-		}
-		backups = append(backups, fileBackup{original: file, backup: backupPath})
-
-		count, err := updateFunc(backupPath)
-		if err != nil {
-			transactioner.rollbackFiles(backups)
-			return 0, displayable_errors.NewTransactionFailedError(err.Error())
-		}
-
-		if err := os.Rename(backupPath, file); err != nil {
-			transactioner.rollbackFiles(backups)
-			return 0, displayable_errors.NewTransactionFailedError(err.Error())
-		}
-
-		total += count
-		stats.Processed++
-	}
-
-	return total, nil
-}
-
-func (transactioner *Transactioner) Delete(files []string,
-	deleteFunc func(string) (int, error), stats *models.ExecutionStats,
-) (int, error) {
-	if err := transactioner.checkFilesBeforeTransaction(files); err != nil {
-		return 0, err
-	}
-
-	backups := make([]fileBackup, 0, len(files))
-	total := 0
-
-	for _, file := range files {
-		backupPath := file + ".sqd_backup"
-		if err := os.Rename(file, backupPath); err != nil {
-			transactioner.rollbackFiles(backups)
-			return 0, displayable_errors.NewTransactionFailedError(err.Error())
-		}
-		backups = append(backups, fileBackup{original: file, backup: backupPath})
-
-		count, err := deleteFunc(backupPath)
-		if err != nil {
-			transactioner.rollbackFiles(backups)
-			return 0, displayable_errors.NewTransactionFailedError(err.Error())
-		}
-
-		if err := os.Rename(backupPath, file); err != nil {
-			transactioner.rollbackFiles(backups)
-			return 0, displayable_errors.NewTransactionFailedError(err.Error())
-		}
-
-		total += count
-		stats.Processed++
-	}
-
-	return total, nil
 }

@@ -1,3 +1,3 @@
 module github.com/overthinkinglabs/sqd
 
-go 1.26.5
+go 1.27

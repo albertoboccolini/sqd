@@ -13,13 +13,15 @@ type Command struct {
 	Replacements   []Replacement
 	Deletions      []Deletion
 	IsBatch        bool
-	SelectTarget   TokenType
+	SelectTargets  []TokenType
 	WhereTarget    TokenType
 	WherePattern   *regexp.Regexp
 	NegateFileName bool
 	ExtraPattern   *regexp.Regexp
 	ExtraNegate    bool
 	OrderBy        []OrderBy
+	Limit          int
+	OutputFormat   OutputFormat
 }
 
 type OrderBy struct {

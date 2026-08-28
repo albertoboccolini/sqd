@@ -44,7 +44,19 @@ func NewDispatcher(
 	}
 }
 
-func (dispatcher *Dispatcher) Execute(command models.Command, files []string, useTransaction bool, dryRun bool, showDetailedOutputInDryMode bool) error {
+func (dispatcher *Dispatcher) printCount(total int, outputFormat models.OutputFormat) {
+	switch outputFormat {
+	case models.JSONOutput:
+		fmt.Printf("{\"matches\":%d}\n", total)
+	case models.CSVOutput:
+		fmt.Println("matches")
+		fmt.Printf("%d\n", total)
+	default:
+		fmt.Printf("%d matches\n", total)
+	}
+}
+
+func (dispatcher *Dispatcher) Execute(command models.Command, files []string, useTransaction bool, dryRun bool, showDetailedOutputInDryMode bool, outputFormat models.OutputFormat) error {
 	stats := models.ExecutionStats{StartTime: time.Now()}
 
 	if (command.Action == models.UPDATE || command.Action == models.DELETE) &&
@@ -70,146 +82,132 @@ func (dispatcher *Dispatcher) Execute(command models.Command, files []string, us
 
 	if command.Action == models.COUNT {
 		total, stats, err := dispatcher.counter.Count(files, command)
-		fmt.Printf("%d matches\n", total)
-		dispatcher.utils.PrintStats(stats)
+		dispatcher.printCount(total, outputFormat)
+		if outputFormat == models.TextOutput {
+			dispatcher.utils.PrintStats(stats)
+		}
+
 		return err
 	}
 
 	if command.Action == models.SELECT {
-		stats, err := dispatcher.searcher.Select(files, command)
-		dispatcher.utils.PrintStats(stats)
+		stats, err := dispatcher.searcher.Select(files, command, outputFormat)
+		if outputFormat == models.TextOutput {
+			dispatcher.utils.PrintStats(stats)
+		}
+
 		return err
 	}
 
 	if command.Action == models.UPDATE {
-		if dryRun {
-			err := dispatcher.dryModeRunner.Validate(command, files, &stats, useTransaction, showDetailedOutputInDryMode)
-			if err != nil && useTransaction {
-				fmt.Println("Dry run: fail")
-				return err
-			}
-
-			fmt.Println("Dry run: pass")
-			return err
-		}
-
-		if useTransaction {
-			var updateFunc func(string) (int, error)
-			if command.IsBatch {
-				updateFunc = func(file string) (int, error) {
-					return dispatcher.updater.Batch(file, command.Replacements)
-				}
-			} else {
-				updateFunc = func(file string) (int, error) {
-					return dispatcher.updater.Single(file, command.Pattern, command.NegateContent, command.Replace)
-				}
-			}
-
-			total, err := dispatcher.transactioner.Update(files, updateFunc, &stats)
-			if err != nil {
-				return err
-			}
-			dispatcher.utils.PrintUpdateMessage(total)
-			dispatcher.utils.PrintStats(stats)
-			return nil
-		}
-
-		errorCollection := models.NewErrorCollection()
-		total := 0
-		for _, file := range files {
-			var count int
-			var err error
-
-			if command.IsBatch {
-				count, err = dispatcher.updater.Batch(file, command.Replacements)
-			} else {
-				count, err = dispatcher.updater.Single(file, command.Pattern, command.NegateContent, command.Replace)
-			}
-
-			if err != nil {
-				errorCollection.Add(err)
-				stats.Skipped++
-				continue
-			}
-			total += count
-			stats.Processed++
-		}
-
-		if errorCollection.HasErrors() {
-			dispatcher.utils.PrintUpdateMessage(total)
-			dispatcher.utils.PrintStats(stats)
-			return errorCollection
-		}
-
-		dispatcher.utils.PrintUpdateMessage(total)
-		dispatcher.utils.PrintStats(stats)
-		return nil
+		return dispatcher.runUpdate(command, files, dryRun, useTransaction, showDetailedOutputInDryMode, outputFormat, &stats)
 	}
 
 	if command.Action == models.DELETE {
-		if dryRun {
-			err := dispatcher.dryModeRunner.Validate(command, files, &stats, useTransaction, showDetailedOutputInDryMode)
-			if err != nil && useTransaction {
-				fmt.Println("Dry run: fail")
-				return err
-			}
-			fmt.Println("Dry run: pass")
-			return err
-		}
-
-		if useTransaction {
-			var deleteFunc func(string) (int, error)
-			if command.IsBatch {
-				deleteFunc = func(file string) (int, error) {
-					return dispatcher.deleter.Batch(file, command.Deletions)
-				}
-			} else {
-				deleteFunc = func(file string) (int, error) {
-					return dispatcher.deleter.Single(file, command.Pattern, command.NegateContent)
-				}
-			}
-
-			total, err := dispatcher.transactioner.Delete(files, deleteFunc, &stats)
-			if err != nil {
-				return err
-			}
-			dispatcher.utils.PrintDeleteMessage(total)
-			dispatcher.utils.PrintStats(stats)
-			return nil
-		}
-
-		errorCollection := models.NewErrorCollection()
-		total := 0
-		for _, file := range files {
-			var count int
-			var err error
-
-			if command.IsBatch {
-				count, err = dispatcher.deleter.Batch(file, command.Deletions)
-			} else {
-				count, err = dispatcher.deleter.Single(file, command.Pattern, command.NegateContent)
-			}
-
-			if err != nil {
-				errorCollection.Add(err)
-				stats.Skipped++
-				continue
-			}
-
-			total += count
-			stats.Processed++
-		}
-
-		if errorCollection.HasErrors() {
-			dispatcher.utils.PrintDeleteMessage(total)
-			dispatcher.utils.PrintStats(stats)
-			return errorCollection
-		}
-
-		dispatcher.utils.PrintDeleteMessage(total)
-		dispatcher.utils.PrintStats(stats)
-		return nil
+		return dispatcher.runDelete(command, files, dryRun, useTransaction, showDetailedOutputInDryMode, outputFormat, &stats)
 	}
 
 	return fmt.Errorf("unhandled command action: %v", command.Action)
+}
+
+func (dispatcher *Dispatcher) runUpdate(command models.Command, files []string, dryRun, useTransaction, showDetailedOutputInDryMode bool, outputFormat models.OutputFormat, stats *models.ExecutionStats) error {
+	if dryRun {
+		err := dispatcher.dryModeRunner.Validate(command, files, stats, useTransaction, showDetailedOutputInDryMode)
+		if err != nil && useTransaction {
+			fmt.Println("Dry run: fail")
+			return err
+		}
+
+		fmt.Println("Dry run: pass")
+		return err
+	}
+
+	total, err := dispatcher.applyUpdate(command, files, useTransaction, stats)
+	if err != nil {
+		return err
+	}
+
+	dispatcher.utils.PrintUpdateMessage(total)
+	if outputFormat == models.TextOutput {
+		dispatcher.utils.PrintStats(*stats)
+	}
+
+	return nil
+}
+
+func (dispatcher *Dispatcher) applyUpdate(command models.Command, files []string, useTransaction bool, stats *models.ExecutionStats) (int, error) {
+	updateFile := func(file string) (int, error) {
+		if command.IsBatch {
+			return dispatcher.updater.Batch(file, command.Replacements)
+		}
+		return dispatcher.updater.Single(file, command.Pattern, command.NegateContent, command.Replace)
+	}
+
+	if useTransaction {
+		return dispatcher.transactioner.Update(files, updateFile, stats)
+	}
+
+	return dispatcher.collectMutationResults(files, updateFile, stats)
+}
+
+func (dispatcher *Dispatcher) runDelete(command models.Command, files []string, dryRun, useTransaction, showDetailedOutputInDryMode bool, outputFormat models.OutputFormat, stats *models.ExecutionStats) error {
+	if dryRun {
+		err := dispatcher.dryModeRunner.Validate(command, files, stats, useTransaction, showDetailedOutputInDryMode)
+		if err != nil && useTransaction {
+			fmt.Println("Dry run: fail")
+			return err
+		}
+		fmt.Println("Dry run: pass")
+		return err
+	}
+
+	total, err := dispatcher.applyDelete(command, files, useTransaction, stats)
+	if err != nil {
+		return err
+	}
+
+	dispatcher.utils.PrintDeleteMessage(total)
+	if outputFormat == models.TextOutput {
+		dispatcher.utils.PrintStats(*stats)
+	}
+
+	return nil
+}
+
+func (dispatcher *Dispatcher) applyDelete(command models.Command, files []string, useTransaction bool, stats *models.ExecutionStats) (int, error) {
+	deleteFile := func(file string) (int, error) {
+		if command.IsBatch {
+			return dispatcher.deleter.Batch(file, command.Deletions)
+		}
+
+		return dispatcher.deleter.Single(file, command.Pattern, command.NegateContent)
+	}
+
+	if useTransaction {
+		return dispatcher.transactioner.Delete(files, deleteFile, stats)
+	}
+
+	return dispatcher.collectMutationResults(files, deleteFile, stats)
+}
+
+func (dispatcher *Dispatcher) collectMutationResults(files []string, mutate func(string) (int, error), stats *models.ExecutionStats) (int, error) {
+	errorCollection := models.NewErrorCollection()
+	total := 0
+	for _, file := range files {
+		count, err := mutate(file)
+		if err != nil {
+			errorCollection.Add(err)
+			stats.Skipped++
+			continue
+		}
+
+		total += count
+		stats.Processed++
+	}
+
+	if errorCollection.HasErrors() {
+		return total, errorCollection
+	}
+
+	return total, nil
 }

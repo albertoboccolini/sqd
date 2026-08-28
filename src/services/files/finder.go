@@ -14,12 +14,14 @@ import (
 type Finder struct {
 	maxTextFileSize int64
 	bufferSize      int
+	ignoreList      *IgnoreList
 }
 
-func NewFinder() *Finder {
+func NewFinder(ignoreList *IgnoreList) *Finder {
 	return &Finder{
 		maxTextFileSize: 100 * 1024 * 1024,
 		bufferSize:      8000,
+		ignoreList:      ignoreList,
 	}
 }
 
@@ -65,23 +67,54 @@ func (finder *Finder) IsTextFile(path string) bool {
 
 func (finder *Finder) FindFiles(pattern string) ([]string, error) {
 	if !strings.Contains(pattern, "*") {
+		info, statErr := os.Stat(pattern)
+		if statErr == nil && info.IsDir() {
+			return finder.walkAndCollect(pattern, "*")
+		}
+
 		return []string{pattern}, nil
 	}
+
+	baseDir, filePattern := ".", pattern
+	if lastSlash := strings.LastIndex(pattern, "/"); lastSlash >= 0 {
+		baseDir = pattern[:lastSlash]
+		filePattern = pattern[lastSlash+1:]
+	}
+
+	return finder.walkAndCollect(baseDir, filePattern)
+}
+
+func (finder *Finder) walkAndCollect(baseDir, filePattern string) ([]string, error) {
+	baseDir = filepath.Clean(baseDir)
 
 	matchingPaths := []string{}
 	walkErrors := models.NewErrorCollection()
 
-	walkErr := filepath.WalkDir(".", func(path string, entry fs.DirEntry, err error) error {
+	walkErr := filepath.WalkDir(baseDir, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			walkErrors.Add(displayable_errors.NewWalkError(err))
 			return nil
 		}
 
+		relativePath, relErr := filepath.Rel(baseDir, path)
+		if relErr != nil {
+			relativePath = path
+		}
+
 		if entry.IsDir() {
+			if finder.ignoreList.ShouldSkipDir(relativePath) {
+				return filepath.SkipDir
+			}
+
 			return nil
 		}
 
-		matched, _ := filepath.Match(pattern, filepath.Base(path))
+		baseName := filepath.Base(path)
+		if finder.ignoreList.ShouldSkipFile(relativePath, baseName) {
+			return nil
+		}
+
+		matched, _ := filepath.Match(filePattern, baseName)
 		if matched {
 			matchingPaths = append(matchingPaths, path)
 		}
@@ -117,10 +150,9 @@ func (finder *Finder) FindFiles(pattern string) ([]string, error) {
 	}
 
 	waitGroup.Wait()
-	var returnErr error
 	if walkErrors.HasErrors() {
-		returnErr = walkErrors
+		return files, walkErrors
 	}
 
-	return files, returnErr
+	return files, nil
 }

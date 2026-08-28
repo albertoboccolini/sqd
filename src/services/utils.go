@@ -12,10 +12,12 @@ import (
 	"github.com/overthinkinglabs/sqd/src/models"
 )
 
-type Utils struct{}
+type Utils struct {
+	defaultConfig *models.DefaultConfig
+}
 
-func NewUtils() *Utils {
-	return &Utils{}
+func NewUtils(defaultConfig *models.DefaultConfig) *Utils {
+	return &Utils{defaultConfig: defaultConfig}
 }
 
 func (utils *Utils) IsPathInsideCwd(path string) bool {
@@ -56,25 +58,28 @@ func (utils *Utils) CanWriteFile(path string) bool {
 	return true
 }
 
-func (utils *Utils) PrintUpdateMessage(count int) {
+func (utils *Utils) printLineCountMessage(count int, action string) {
 	if count == 1 {
-		fmt.Println("1 line updated")
+		fmt.Printf("1 line %s\n", action)
 		return
 	}
 
-	fmt.Printf("%d lines updated\n", count)
+	fmt.Printf("%d lines %s\n", count, action)
+}
+
+func (utils *Utils) PrintUpdateMessage(count int) {
+	utils.printLineCountMessage(count, "updated")
 }
 
 func (utils *Utils) PrintDeleteMessage(count int) {
-	if count == 1 {
-		fmt.Println("1 line deleted")
-		return
-	}
-
-	fmt.Printf("%d lines deleted\n", count)
+	utils.printLineCountMessage(count, "deleted")
 }
 
 func (utils *Utils) PrintStats(stats models.ExecutionStats) {
+	if !utils.defaultConfig.Output.ShowStats {
+		return
+	}
+
 	elapsed := time.Since(stats.StartTime).Seconds()
 	fmt.Printf("Processed: %d files in %.2fms\n", stats.Processed, elapsed*1000)
 	if stats.Skipped > 0 {
@@ -82,9 +87,37 @@ func (utils *Utils) PrintStats(stats models.ExecutionStats) {
 	}
 }
 
+func (utils *Utils) colorEscape() string {
+	switch utils.defaultConfig.Output.Color {
+	case "green":
+		return "\033[1;32m"
+	case "red":
+		return "\033[1;31m"
+	case "yellow":
+		return "\033[1;33m"
+	case "cyan":
+		return "\033[1;36m"
+	case "purple":
+		return "\033[38;5;93m"
+	case "none":
+		return ""
+	default:
+		return "\033[1;34m"
+	}
+}
+
 func (utils *Utils) HighlightMatch(text string, pattern *regexp.Regexp) string {
+	if pattern == nil {
+		return text
+	}
+
+	colorStart := utils.colorEscape()
+	if colorStart == "" {
+		return text
+	}
+
 	return pattern.ReplaceAllStringFunc(text, func(match string) string {
-		return "\033[1;34m" + match + "\033[0m"
+		return colorStart + match + "\033[0m"
 	})
 }
 
@@ -100,8 +133,7 @@ func (utils *Utils) AddWalkWarnings(errorCollection *models.ErrorCollection, wal
 		return
 	}
 
-	var walkErrorCollection *models.ErrorCollection
-	if errors.As(walkWarnings, &walkErrorCollection) {
+	if walkErrorCollection, ok := errors.AsType[*models.ErrorCollection](walkWarnings); ok {
 		for _, walkErr := range walkErrorCollection.Errors() {
 			errorCollection.Add(walkErr)
 		}

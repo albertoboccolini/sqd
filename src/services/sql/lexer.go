@@ -41,7 +41,10 @@ func (lexer *Lexer) peekChar() byte {
 }
 
 func (lexer *Lexer) skipWhitespace() {
-	for lexer.currentChar == ' ' || lexer.currentChar == '\t' || lexer.currentChar == '\n' || lexer.currentChar == '\r' {
+	for lexer.currentChar == ' ' ||
+		lexer.currentChar == '\t' ||
+		lexer.currentChar == '\n' ||
+		lexer.currentChar == '\r' {
 		lexer.readChar()
 	}
 }
@@ -63,7 +66,15 @@ func (lexer *Lexer) readString() string {
 
 func (lexer *Lexer) readIdentifier() string {
 	start := lexer.position
-	for lexer.isLetter(lexer.currentChar) || lexer.isDigit(lexer.currentChar) || lexer.currentChar == '_' || lexer.currentChar == '.' || lexer.currentChar == '*' || lexer.currentChar == '%' || lexer.currentChar == '-' || lexer.currentChar == '/' {
+	for lexer.isLetter(lexer.currentChar) ||
+		lexer.isDigit(lexer.currentChar) ||
+		lexer.currentChar == '_' ||
+		lexer.currentChar == '.' ||
+		lexer.currentChar == '*' ||
+		lexer.currentChar == '%' ||
+		lexer.currentChar == '-' ||
+		lexer.currentChar == '/' ||
+		lexer.currentChar >= 0x80 {
 		lexer.readChar()
 	}
 
@@ -112,7 +123,7 @@ func (lexer *Lexer) NextToken() models.Token {
 		token.Literal = ""
 		return token
 	case '*':
-		if lexer.isLetter(lexer.peekChar()) || lexer.peekChar() == '.' || lexer.peekChar() == '/' {
+		if lexer.isLetter(lexer.peekChar()) || lexer.peekChar() == '.' || lexer.peekChar() == '/' || lexer.peekChar() >= 0x80 {
 			token.Literal = lexer.readIdentifier()
 			token.Type = models.IDENTIFIER
 			return token
@@ -122,7 +133,11 @@ func (lexer *Lexer) NextToken() models.Token {
 		return token
 	}
 
-	if lexer.isLetter(lexer.currentChar) || lexer.currentChar == '%' || lexer.currentChar == '/' {
+	if lexer.isLetter(lexer.currentChar) ||
+		lexer.currentChar == '%' ||
+		lexer.currentChar == '/' ||
+		lexer.isDigit(lexer.currentChar) ||
+		lexer.currentChar >= 0x80 {
 		token.Literal = lexer.readIdentifier()
 		token.Type = lexer.lookupKeyword(token.Literal)
 		return token
@@ -153,6 +168,8 @@ func (lexer *Lexer) lookupKeyword(ident string) models.TokenType {
 		"ASC":     models.ASC,
 		"DESC":    models.DESC,
 		"AND":     models.AND,
+		"LIMIT":   models.LIMIT,
+		"LINE":    models.LINE,
 	}
 
 	if token, ok := keywords[upper]; ok {

@@ -1,23 +1,26 @@
 package mock
 
 import (
+	"github.com/overthinkinglabs/sqd/src/models"
 	"github.com/overthinkinglabs/sqd/src/services"
 	"github.com/overthinkinglabs/sqd/src/services/commands"
 	"github.com/overthinkinglabs/sqd/src/services/files"
 )
 
 func NewDispatcher() *commands.Dispatcher {
-	utils := services.NewUtils()
+	defaultConfig := models.NewDefaultConfig()
+	utils := services.NewUtils(defaultConfig)
 	processor := files.NewProcessor(utils)
 
 	parallelizer := files.NewParallelizer(utils)
 	dryModeRunner := NewDryModeRunner()
 	transactioner := commands.NewTransactioner(utils)
 	sorter := commands.NewSorter()
-	searcher := commands.NewSearcher(parallelizer, sorter, utils)
-	counter := commands.NewCounter(parallelizer, searcher)
-	updater := commands.NewUpdater(processor, utils)
-	deleter := commands.NewDeleter(processor, utils)
+	lineReader := commands.NewLineReader()
+	searcher := commands.NewSearcher(parallelizer, sorter, utils, lineReader)
+	counter := commands.NewCounter(parallelizer, searcher, lineReader)
+	updater := commands.NewUpdater(processor, utils, lineReader)
+	deleter := commands.NewDeleter(processor, utils, lineReader)
 
 	return commands.NewDispatcher(
 		searcher,

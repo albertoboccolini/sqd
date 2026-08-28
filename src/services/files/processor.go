@@ -27,35 +27,32 @@ func (processor *Processor) ProcessFile(filename string, transformFunc func([]st
 
 	info, err := os.Stat(filename)
 	if err != nil {
-		if errors.Is(err, os.ErrPermission) {
-			return 0, displayable_errors.NewPermissionDeniedError(filename)
-		}
-
-		return 0, err
+		return 0, processor.mapFileError(filename, err)
 	}
 
 	data, err := os.ReadFile(filename)
 	if err != nil {
-		if errors.Is(err, os.ErrPermission) {
-			return 0, displayable_errors.NewPermissionDeniedError(filename)
-		}
-
-		return 0, err
+		return 0, processor.mapFileError(filename, err)
 	}
 
 	lines := strings.Split(string(data), "\n")
 	newLines, count := transformFunc(lines)
 
-	if count > 0 {
-		err = os.WriteFile(filename, []byte(strings.Join(newLines, "\n")), info.Mode().Perm())
-		if err != nil {
-			if errors.Is(err, os.ErrPermission) {
-				return 0, displayable_errors.NewPermissionDeniedError(filename)
-			}
+	if count == 0 {
+		return 0, nil
+	}
 
-			return 0, err
-		}
+	if err := os.WriteFile(filename, []byte(strings.Join(newLines, "\n")), info.Mode().Perm()); err != nil {
+		return 0, processor.mapFileError(filename, err)
 	}
 
 	return count, nil
+}
+
+func (processor *Processor) mapFileError(filename string, err error) error {
+	if errors.Is(err, os.ErrPermission) {
+		return displayable_errors.NewPermissionDeniedError(filename)
+	}
+
+	return err
 }

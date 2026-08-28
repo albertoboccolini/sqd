@@ -51,7 +51,8 @@ func setupPermissionDeniedTest(t *testing.T) ([]string, error) {
 		}
 	})
 
-	finder := files.NewFinder()
+	ignoreList := files.NewIgnoreList()
+	finder := files.NewFinder(ignoreList)
 	return finder.FindFiles("*.md")
 }
 
@@ -61,7 +62,8 @@ func TestIsTextFileText(t *testing.T) {
 	file.WriteString("This is plain text\n")
 	file.Close()
 
-	finder := files.NewFinder()
+	ignoreList := files.NewIgnoreList()
+	finder := files.NewFinder(ignoreList)
 
 	if !finder.IsTextFile(file.Name()) {
 		t.Error("text file should be detected as text")
@@ -74,7 +76,8 @@ func TestIsTextFileBinary(t *testing.T) {
 	file.Write([]byte{0x00, 0x01, 0xFF, 0xFE, 0x00, 0x00})
 	file.Close()
 
-	finder := files.NewFinder()
+	ignoreList := files.NewIgnoreList()
+	finder := files.NewFinder(ignoreList)
 
 	if finder.IsTextFile(file.Name()) {
 		t.Error("binary file should not be detected as text")
@@ -87,7 +90,8 @@ func TestIsTextFileNullByte(t *testing.T) {
 	file.WriteString("text\x00more")
 	file.Close()
 
-	finder := files.NewFinder()
+	ignoreList := files.NewIgnoreList()
+	finder := files.NewFinder(ignoreList)
 
 	if finder.IsTextFile(file.Name()) {
 		t.Error("file with null byte should not be text")
@@ -100,7 +104,8 @@ func TestIsTextFileControlChars(t *testing.T) {
 	file.Write([]byte{0x01, 0x02, 0x03})
 	file.Close()
 
-	finder := files.NewFinder()
+	ignoreList := files.NewIgnoreList()
+	finder := files.NewFinder(ignoreList)
 
 	if finder.IsTextFile(file.Name()) {
 		t.Error("file with control chars should not be text")
@@ -123,8 +128,7 @@ func TestFindFilesReturnsErrorCollectionOnPermissionDenied(t *testing.T) {
 		return
 	}
 
-	var errorCollection *models.ErrorCollection
-	if !errors.As(err, &errorCollection) {
+	if _, ok := errors.AsType[*models.ErrorCollection](err); !ok {
 		t.Errorf("should return error collection with walk errors")
 	}
 }
@@ -142,10 +146,9 @@ func TestFindFilesIncludesWalkErrorInCollection(t *testing.T) {
 		return
 	}
 
-	var walkError *displayable_errors.WalkError
 	found := false
 	for _, e := range errorCollection.Errors() {
-		if errors.As(e, &walkError) {
+		if _, ok := errors.AsType[*displayable_errors.WalkError](e); ok {
 			found = true
 			break
 		}

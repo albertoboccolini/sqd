@@ -16,9 +16,7 @@ func NewErrorHandler() *ErrorHandler {
 }
 
 func (errorHandler *ErrorHandler) handleSingleError(err error) {
-	var displayableError *displayable_errors.DisplayableError
-
-	if errors.As(err, &displayableError) {
+	if _, ok := errors.AsType[*displayable_errors.DisplayableError](err); ok {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		return
 	}
@@ -28,9 +26,7 @@ func (errorHandler *ErrorHandler) handleSingleError(err error) {
 }
 
 func (errorHandler *ErrorHandler) HandleError(err error) {
-	var errorCollection *models.ErrorCollection
-
-	if errors.As(err, &errorCollection) {
+	if errorCollection, ok := errors.AsType[*models.ErrorCollection](err); ok {
 		for _, e := range errorCollection.Errors() {
 			errorHandler.handleSingleError(e)
 		}

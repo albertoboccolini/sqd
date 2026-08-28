@@ -32,7 +32,11 @@ func (extractor *Extractor) extractFilename(sql string, startKeyword, endKeyword
 	return strings.Trim(filename, "'\"")
 }
 
-func (extractor *Extractor) likeToRegex(pattern string) *regexp.Regexp {
+func (extractor *Extractor) compileExact(literal string) *regexp.Regexp {
+	return regexp.MustCompile("^" + regexp.QuoteMeta(literal) + "$")
+}
+
+func (extractor *Extractor) compileLike(pattern string) *regexp.Regexp {
 	hasStart := strings.HasPrefix(pattern, "%")
 	hasEnd := strings.HasSuffix(pattern, "%")
 

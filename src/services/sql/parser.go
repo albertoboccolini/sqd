@@ -3,6 +3,7 @@ package sql
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/overthinkinglabs/sqd/src/models"
@@ -53,14 +54,14 @@ func (parser *Parser) parseComparison() (*regexp.Regexp, bool) {
 		parser.nextToken()
 		exactMatch := parser.currentToken.Literal
 		parser.nextToken()
-		return regexp.MustCompile("^" + regexp.QuoteMeta(exactMatch) + "$"), isNotEquals
+		return parser.extractor.compileExact(exactMatch), isNotEquals
 	}
 
 	if parser.currentTokenIs(models.LIKE) {
 		parser.nextToken()
 		likePattern := parser.currentToken.Literal
 		parser.nextToken()
-		return parser.extractor.likeToRegex(likePattern), false
+		return parser.extractor.compileLike(likePattern), false
 	}
 
 	return nil, false
@@ -155,8 +156,55 @@ func (parser *Parser) parseOrderBy() []models.OrderBy {
 	return orderBy
 }
 
+func (parser *Parser) parseLimit() int {
+	if !parser.currentTokenIs(models.LIMIT) {
+		return 0
+	}
+
+	parser.nextToken()
+	limit, err := strconv.Atoi(parser.currentToken.Literal)
+	if err != nil {
+		return 0
+	}
+
+	parser.nextToken()
+	return limit
+}
+
+func (parser *Parser) parseSelectTargets(statement *ast.Select) {
+	statement.Targets = nil
+
+	for {
+		if parser.peekTokenIs(models.NAME) {
+			parser.nextToken()
+			statement.Targets = append(statement.Targets, models.NAME)
+		}
+
+		if parser.peekTokenIs(models.CONTENT) {
+			parser.nextToken()
+			statement.Targets = append(statement.Targets, models.CONTENT)
+		}
+
+		if parser.peekTokenIs(models.LINE) {
+			parser.nextToken()
+			statement.Targets = append(statement.Targets, models.LINE)
+		}
+
+		if parser.peekTokenIs(models.ASTERISK) {
+			parser.nextToken()
+			statement.Targets = append(statement.Targets, models.ASTERISK)
+		}
+
+		if !parser.peekTokenIs(models.COMMA) {
+			break
+		}
+
+		parser.nextToken()
+	}
+}
+
 func (parser *Parser) parseSelectStatement() ast.Node {
-	statement := &ast.Select{Target: models.ASTERISK}
+	statement := &ast.Select{Targets: []models.TokenType{models.ASTERISK}}
 
 	if parser.peekTokenIs(models.COUNT) {
 		statement.IsCount = true
@@ -167,19 +215,7 @@ func (parser *Parser) parseSelectStatement() ast.Node {
 		}
 	}
 
-	if parser.peekTokenIs(models.NAME) {
-		statement.Target = models.NAME
-		parser.nextToken()
-	}
-
-	if parser.peekTokenIs(models.CONTENT) {
-		statement.Target = models.CONTENT
-		parser.nextToken()
-	}
-
-	if parser.peekTokenIs(models.ASTERISK) {
-		parser.nextToken()
-	}
+	parser.parseSelectTargets(statement)
 
 	for !parser.currentTokenIs(models.EOF) {
 		if parser.currentTokenIs(models.FROM) {
@@ -196,6 +232,8 @@ func (parser *Parser) parseSelectStatement() ast.Node {
 		if orderBy := parser.parseOrderBy(); orderBy != nil {
 			statement.OrderBy = orderBy
 		}
+
+		statement.Limit = parser.parseLimit()
 
 		parser.nextToken()
 	}

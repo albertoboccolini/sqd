@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/overthinkinglabs/sqd/src/models"
 	"github.com/overthinkinglabs/sqd/tests/mock"
 )
 
@@ -21,7 +22,7 @@ func TestTransactionPreservesFilePermissions(t *testing.T) {
 	command := parser.Parse("UPDATE test.txt SET content='NEW' WHERE content = 'content'")
 
 	dispatcher := mock.NewDispatcher()
-	if err := dispatcher.Execute(command, []string{file}, true, false, false); err != nil {
+	if err := dispatcher.Execute(command, []string{file}, true, false, false, models.TextOutput); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -41,7 +42,7 @@ func TestTransactionEmptyFileHandling(t *testing.T) {
 	command := parser.Parse("UPDATE test.txt SET content='NEW' WHERE content = 'nonexistent'")
 
 	dispatcher := mock.NewDispatcher()
-	if err := dispatcher.Execute(command, []string{file}, true, false, false); err != nil {
+	if err := dispatcher.Execute(command, []string{file}, true, false, false, models.TextOutput); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -62,7 +63,7 @@ func TestTransactionWithTrailingNewline(t *testing.T) {
 	command := parser.Parse("UPDATE test.txt SET content='UPDATED' WHERE content = 'line2'")
 
 	dispatcher := mock.NewDispatcher()
-	if err := dispatcher.Execute(command, []string{file}, true, false, false); err != nil {
+	if err := dispatcher.Execute(command, []string{file}, true, false, false, models.TextOutput); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -92,7 +93,7 @@ func TestTransactionMultipleFilesSuccess(t *testing.T) {
 	command := parser.Parse("UPDATE *.txt SET content='CHANGED' WHERE content LIKE 'test'")
 
 	dispatcher := mock.NewDispatcher()
-	if err := dispatcher.Execute(command, []string{file1, file2, file3}, true, false, false); err != nil {
+	if err := dispatcher.Execute(command, []string{file1, file2, file3}, true, false, false, models.TextOutput); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 

@@ -1,14 +1,36 @@
 package sql
 
 import (
+	"strings"
+
 	"github.com/overthinkinglabs/sqd/src/models"
 	"github.com/overthinkinglabs/sqd/src/models/ast"
 )
 
-type CommandBuilder struct{}
+type CommandBuilder struct {
+	fromAliases map[string]string
+}
 
-func NewCommandBuilder() *CommandBuilder {
-	return &CommandBuilder{}
+func NewCommandBuilder(fromAliases map[string]string) *CommandBuilder {
+	return &CommandBuilder{fromAliases: fromAliases}
+}
+
+func (commandBuilder *CommandBuilder) resolveSource(source string) string {
+	if alias, exists := commandBuilder.fromAliases[source]; exists {
+		return alias
+	}
+
+	firstSlash := strings.Index(source, "/")
+	if firstSlash < 0 {
+		return source
+	}
+
+	aliasKey := source[:firstSlash]
+	if alias, exists := commandBuilder.fromAliases[aliasKey]; exists {
+		return alias + source[firstSlash:]
+	}
+
+	return source
 }
 
 func (commandBuilder *CommandBuilder) populateWhere(command *models.Command, whereClause *ast.Where) {
@@ -36,11 +58,12 @@ func (commandBuilder *CommandBuilder) populateWhere(command *models.Command, whe
 
 func (commandBuilder *CommandBuilder) VisitSelect(statement *ast.Select) (models.Command, error) {
 	command := models.Command{
-		Action:       models.SELECT,
-		SelectTarget: statement.Target,
-		File:         statement.Source,
-		OrderBy:      statement.OrderBy,
-		WhereTarget:  models.CONTENT,
+		Action:        models.SELECT,
+		SelectTargets: statement.Targets,
+		File:          commandBuilder.resolveSource(statement.Source),
+		OrderBy:       statement.OrderBy,
+		Limit:         statement.Limit,
+		WhereTarget:   models.CONTENT,
 	}
 
 	if statement.IsCount {
@@ -55,7 +78,7 @@ func (commandBuilder *CommandBuilder) VisitSelect(statement *ast.Select) (models
 func (commandBuilder *CommandBuilder) VisitUpdate(statement *ast.Update) (models.Command, error) {
 	command := models.Command{
 		Action:       models.UPDATE,
-		File:         statement.Source,
+		File:         commandBuilder.resolveSource(statement.Source),
 		IsBatch:      statement.IsBatch,
 		Replacements: statement.Replacements,
 		WhereTarget:  models.CONTENT,
@@ -75,7 +98,7 @@ func (commandBuilder *CommandBuilder) VisitUpdate(statement *ast.Update) (models
 func (commandBuilder *CommandBuilder) VisitDelete(statement *ast.Delete) (models.Command, error) {
 	command := models.Command{
 		Action:      models.DELETE,
-		File:        statement.Source,
+		File:        commandBuilder.resolveSource(statement.Source),
 		IsBatch:     statement.IsBatch,
 		Deletions:   statement.Deletions,
 		WhereTarget: models.CONTENT,
